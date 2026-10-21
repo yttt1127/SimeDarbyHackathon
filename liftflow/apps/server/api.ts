@@ -5,10 +5,11 @@ import { resolve, extname, sep } from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Simulation } from '../../packages/simulation/engine';
 import type { Config } from '../../packages/shared/types';
+import { checkOperatorPassword, checkOrigin, resolveRuntimeConfig, type RuntimeConfig } from './runtime';
 
-export function createApp(initial = new Simulation()) {
+export function createApp(initial = new Simulation(), runtime: RuntimeConfig = resolveRuntimeConfig(process.env)) {
   let simulation = initial;
-  const sessions = new Map<string, string>();
+  const sessions = new Map<string, { sessionId: string; operator: boolean; failedLogins: number }>();
   const sockets = new WebSocketServer({ noServer: true });
   const json = (response: ServerResponse, status: number, data: unknown) => {
     response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -42,24 +43,41 @@ export function createApp(initial = new Simulation()) {
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
     try {
-      // Local-only application: reject cross-site mutation attempts.
-      const origin = request.headers.origin;
-      if (origin && !['http://127.0.0.1:5173', 'http://localhost:5173', 'http://127.0.0.1:3001', 'http://localhost:3001'].includes(origin))
+      if (!checkOrigin(request.headers.origin, runtime))
         return json(response, 403, { error: 'Origin not allowed' });
       if (request.method === 'GET' && url.pathname === '/api/state') return json(response, 200, simulation.snapshot());
       if (request.method === 'GET' && url.pathname === '/api/events') return json(response, 200, simulation.events);
       if (request.method === 'POST' && url.pathname === '/api/session') {
-        const token = randomUUID(), sessionId = randomUUID(); sessions.set(token, sessionId); return json(response, 200, { token, sessionId });
+        const token = randomUUID(), sessionId = randomUUID();
+        const operator = !runtime.publicMode;
+        sessions.set(token, { sessionId, operator, failedLogins: 0 });
+        return json(response, 200, { token, sessionId, operator });
       }
       if (url.pathname.startsWith('/api/')) {
         const token = request.headers['x-session-token'];
         if (typeof token !== 'string' || !sessions.has(token)) return json(response, 401, { error: 'Session expired; reload the app' });
-        const sessionId = sessions.get(token)!;
+        const session = sessions.get(token)!;
+        const sessionId = session.sessionId;
+        if (request.method === 'GET' && url.pathname === '/api/operator/me')
+          return json(response, 200, { operator: session.operator });
         if (request.method === 'GET' && url.pathname === '/api/alternatives') {
           return json(response, 200, simulation.alternatives(sessionId, url.searchParams.get('id') ?? ''));
         }
         if (request.method !== 'POST') return json(response, 404, { error: 'Route not found' });
         const data = await body(request);
+        if (url.pathname === '/api/operator/login') {
+          if (session.failedLogins >= 5) return json(response, 429, { error: 'Too many failed attempts in this session. Open a new session to try again.' });
+          const password = string(data, 'password');
+          if (!checkOperatorPassword(password, runtime)) {
+            session.failedLogins++;
+            return json(response, 403, { error: 'Operator password is incorrect' });
+          }
+          session.operator = true;
+          session.failedLogins = 0;
+          return json(response, 200, { operator: true });
+        }
+        if (['/api/passengers', '/api/traffic', '/api/control', '/api/config', '/api/scenario'].includes(url.pathname) && !session.operator)
+          return json(response, 403, { error: 'Operator access required' });
         let result: unknown = { ok: true };
         switch (url.pathname) {
           case '/api/request': result = simulation.requestDirection(sessionId, numeric(data, 'origin'), string(data, 'direction')); break;
@@ -127,8 +145,7 @@ export function createApp(initial = new Simulation()) {
   });
   server.on('upgrade', (request, socket, head) => {
     if (request.url !== '/ws') return socket.destroy();
-    const origin = request.headers.origin;
-    if (origin && !/^http:\/\/(localhost|127\.0\.0\.1):(5173|3001)$/.test(origin)) return socket.destroy();
+    if (!checkOrigin(request.headers.origin, runtime)) return socket.destroy();
     sockets.handleUpgrade(request, socket, head, client => {
       client.send(JSON.stringify(simulation.snapshot()));
     });

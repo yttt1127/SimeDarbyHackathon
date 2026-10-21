@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { createApp } from '../apps/server/api';
 import type { Snapshot } from '../packages/shared/types';
+import { resolveRuntimeConfig, type RuntimeConfig } from '../apps/server/runtime';
 
 const apps: ReturnType<typeof createApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
-async function fixture() {
-  const app = createApp(); apps.push(app);
+async function fixture(runtime?: RuntimeConfig) {
+  const app = createApp(undefined, runtime); apps.push(app);
   await new Promise<void>(resolve => app.server.listen(0, '127.0.0.1', resolve));
   const address = app.server.address() as { port: number };
   const base = `http://127.0.0.1:${address.port}`;
@@ -59,5 +60,33 @@ describe('M2/M5 · API integration', () => {
     expect(state.cars[1].stops.some(s => s.floor === 4)).toBe(false);
     expect((await f.post('control', { action: 'reset' })).status).toBe(200);
     expect(f.app.simulation.requests).toHaveLength(0);
+  });
+  it('keeps passenger calls open while protecting public operator actions and both origin paths', async () => {
+    const origin = 'https://liftflow.example.test';
+    const runtime = resolveRuntimeConfig({ RENDER: 'true', RENDER_EXTERNAL_URL: origin,
+      LIFTFLOW_OPERATOR_PASSWORD: 'example-only-long-test-passphrase' });
+    const f = await fixture(runtime);
+    const browserPost = async (path: string, data: unknown) => fetch(`${f.base}/api/${path}`, {
+      method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-Session-Token': f.token }, body: JSON.stringify(data),
+    });
+    expect((await fetch(`${f.base}/api/state`, { headers: { Origin: origin } })).status).toBe(200);
+    expect((await fetch(`${f.base}/api/state`, { headers: { Origin: 'https://other.example' } })).status).toBe(403);
+    expect((await browserPost('request', { origin: 4, direction: 'UP' })).status).toBe(200);
+    for (const path of ['control', 'config', 'scenario', 'passengers', 'traffic'])
+      expect((await browserPost(path, {})).status).toBe(403);
+    expect((await browserPost('operator/login', { password: 'wrong' })).status).toBe(403);
+    expect((await browserPost('control', { action: 'reset' })).status).toBe(403);
+    expect((await browserPost('operator/login', { password: 'example-only-long-test-passphrase' })).status).toBe(200);
+    expect((await browserPost('control', { action: 'reset' })).status).toBe(200);
+    expect(await (await fetch(`${f.base}/api/operator/me`, { headers: { Origin: origin, 'X-Session-Token': f.token } })).json()).toEqual({ operator: true });
+    const connected = new WebSocket(f.ws, { origin });
+    await new Promise<void>((resolve, reject) => { connected.once('open', () => resolve()); connected.once('error', reject); });
+    const next = new Promise<Snapshot>(resolve => connected.once('message', data => resolve(JSON.parse(data.toString()))));
+    f.app.broadcast();
+    expect((await next).cars).toHaveLength(2);
+    connected.close();
+    const rejected = new WebSocket(f.ws, { origin: 'https://other.example' });
+    await new Promise<void>(resolve => { rejected.once('error', () => resolve()); });
+    expect(rejected.readyState).not.toBe(WebSocket.OPEN);
   });
 });

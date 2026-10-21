@@ -5,6 +5,7 @@ export function useLive() {
   const [state, setState] = useState<Snapshot>();
   const [connected, setConnected] = useState(false);
   const [session, setSession] = useState<{ token: string; sessionId: string }>();
+  const [operator, setOperator] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
     let closed = false, socket: WebSocket | undefined, timer: ReturnType<typeof setTimeout>;
@@ -13,13 +14,15 @@ export function useLive() {
         const saved = sessionStorage.getItem('liftflow-session');
         let current = saved ? JSON.parse(saved) : undefined;
         if (current) {
-          const check = await fetch('/api/alternatives', { headers: { 'X-Session-Token': current.token } });
-          if (!check.ok) current = undefined;
+          const check = await fetch('/api/operator/me', { headers: { 'X-Session-Token': current.token } });
+          if (check.ok) setOperator((await check.json()).operator === true);
+          else current = undefined;
         }
         if (!current) {
           const response = await fetch('/api/session', { method: 'POST' });
           if (!response.ok) throw new Error('Could not start local session');
           current = await response.json();
+          setOperator(current.operator === true);
           sessionStorage.setItem('liftflow-session', JSON.stringify(current));
         }
         if (closed) return;
@@ -42,8 +45,9 @@ export function useLive() {
       const response = await fetch('/api/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Session-Token': session.token }, body: JSON.stringify(data) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+      if (path === 'operator/login') setOperator(result.operator === true);
       setError(''); return true;
     } catch (error) { setError(error instanceof Error ? error.message : 'Command failed'); return false; }
   }
-  return { state, connected, session, error, setError, command };
+  return { state, connected, session, operator, error, setError, command };
 }

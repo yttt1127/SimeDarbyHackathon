@@ -1,6 +1,6 @@
 # Liftflow V0.1 architecture
 
-The Node process owns one in-memory simulation. React dashboard and passenger views subscribe to identical versioned snapshots over WebSocket. Commands use validated HTTP JSON; a server-issued per-browser session token scopes passenger commands. This is local demo isolation, not production authentication.
+The Node process owns one in-memory simulation. React dashboard and passenger views subscribe to identical versioned snapshots over WebSocket. Commands use validated HTTP JSON; a server-issued per-browser session token scopes passenger commands. Public operator sessions additionally require an environment-configured password. This is prototype access control, not a full account system.
 
 ## Boundaries and models
 

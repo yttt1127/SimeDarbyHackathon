@@ -49,12 +49,12 @@ function App() {
               <Stats state={state} />
               <div className="dashboard-grid">
                 <section className="panel building-panel"><PanelTitle eyebrow="REAL-TIME POSITION" title="The building at a glance" extra={<span className="subtle-badge">{state.config.floors} FLOORS</span>} /><Building state={state} /><div className="legend"><span><i className="legend-dot green" /> Lift A</span><span><i className="legend-dot blue" /> Lift B</span><span>● Waiting passengers</span></div></section>
-                <section className="panel operations"><PanelTitle eyebrow="SIMULATION" title="You’re in control" extra={<span className={`status-dot ${state.running ? 'on' : ''}`} />} /><Controls state={state} command={command} onAdd={() => setAddOpen(true)} /></section>
+                <section className="panel operations"><PanelTitle eyebrow="SIMULATION" title={live.operator ? 'You’re in control' : 'Operator access'} extra={<span className={`status-dot ${state.running ? 'on' : ''}`} />} />{live.operator ? <Controls state={state} command={command} onAdd={() => setAddOpen(true)} /> : <OperatorLogin command={command} />}</section>
               </div>
               <div className="section-heading"><div><h2>Every stop. The full picture.</h2><p>Live route plans with arrival estimates and capacity forecasts.</p></div><span className="subtle-badge">OBSERVED + PREDICTED</span></div>
               <div className="lift-grid">{state.cars.map((car, i) => <LiftPanel key={car.id} car={car} index={i} state={state} />)}</div>
-              <div className="bottom-grid"><Activity state={state} /><section className="panel"><PanelTitle eyebrow="MODEL SETTINGS" title="Built to be explored" /><Settings config={state.config} command={command} /></section></div>
-            </> : <Passenger state={state} session={live.session} command={command} />}
+              <div className="bottom-grid"><Activity state={state} />{live.operator && <section className="panel"><PanelTitle eyebrow="MODEL SETTINGS" title="Built to be explored" /><Settings config={state.config} command={command} /></section>}</div>
+            </> : <Passenger state={state} session={live.session} operator={live.operator} command={command} />}
           </fieldset>}
         <footer><span>Liftflow <b>V0.1</b> · A functional simulation, one floor at a time.</span><span>Headcounts estimate comfort, not weight or certified load capacity.</span></footer>
       </main>
@@ -64,6 +64,13 @@ function App() {
 }
 function PanelTitle({ eyebrow, title, extra }: { eyebrow: string; title: string; extra?: React.ReactNode }) {
   return <div className="panel-title"><div><div className="eyebrow">{eyebrow}</div><h2>{title}</h2></div>{extra}</div>;
+}
+function OperatorLogin({ command }: { command: Command }) {
+  const [password, setPassword] = useState('');
+  return <form className="operator-login" onSubmit={async e => {
+    e.preventDefault();
+    if (await command('operator/login', { password })) setPassword('');
+  }}><p>Shared simulation controls require an operator password on the public demo. Passenger requests remain available to visitors.</p><label>Operator password<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required /></label><button className="primary full">Unlock controls</button></form>;
 }
 function Stats({ state }: { state: Snapshot }) {
   const waiting = state.requests.filter(r => r.status === 'waiting').length;
@@ -143,7 +150,7 @@ function AddPassenger({ floors, command, close }: { floors: number; command: Com
   const [sending, setSending] = useState(false);
   return <div className="modal-backdrop"><section className="panel modal" role="dialog" aria-modal="true" aria-labelledby="add-title"><button className="close-modal" onClick={close} aria-label="Close dialog">×</button><div className="eyebrow">CREATE A JOURNEY</div><h2 id="add-title">People make the building move.</h2><p>Destinations are private simulation truth until boarding registers a car call.</p><form onSubmit={async e => { e.preventDefault(); setSending(true); if (await command('passengers', { origin, destination, count })) close(); setSending(false); }}><div className="settings-grid"><label>Origin floor<input autoFocus type="number" min={1} max={floors} value={origin} onChange={e => setOrigin(Number(e.target.value))} required /></label><label>Destination floor<input type="number" min={1} max={floors} value={destination} onChange={e => setDestination(Number(e.target.value))} required /></label><label>Passengers<input type="number" min={1} max={100} value={count} onChange={e => setCount(Number(e.target.value))} required /></label></div>{origin === destination && <p className="warning">Choose a different destination floor.</p>}<button disabled={sending || origin === destination} className="primary full">Add {count} {count === 1 ? 'passenger' : 'passengers'}</button></form></section></div>;
 }
-function Passenger({ state, session, command }: { state: Snapshot; session?: { token: string; sessionId: string }; command: Command }) {
+function Passenger({ state, session, operator, command }: { state: Snapshot; session?: { token: string; sessionId: string }; operator: boolean; command: Command }) {
   const [floor, setFloor] = useState(4);
   const [alternatives, setAlternatives] = useState<Candidate[]>([]);
   useEffect(() => setFloor(f => Math.min(f, state.config.floors)), [state.config.floors]);
@@ -169,7 +176,7 @@ function Passenger({ state, session, command }: { state: Snapshot; session?: { t
         {last.status === 'waiting' && pickup && <div className={pickup.availability === 'Likely full' ? 'warning' : 'notice'}>{pickup.availability === 'Likely full' ? 'Likely insufficient boarding space. You may need another lift.' : `${pickup.availability} · ${pickup.spaces} estimated spaces at pickup.`}{pickup.eta <= 8 ? ' Your lift is approaching.' : ''}</div>}
         {last.status === 'waiting' && <><p className="explanation"><b>At assignment:</b> {last.explanation}</p>{alternatives.map(candidate => <div className="alternative" key={candidate.elevatorId}><span className="tiny-label">A BETTER BOARDING OUTLOOK</span><h3>Consider {candidate.elevatorId} <span>↗</span></h3><p>{candidate.explanation}</p><button className="primary full" onClick={() => void command('reassign', { id: last.id, elevatorId: candidate.elevatorId })}>Accept {candidate.elevatorId}</button></div>)}<button className="text-button" disabled={committed} onClick={() => void command('cancel', { id: last.id })}>Cancel my request</button>{committed && <p className="small-note">Your pickup stop is physically committed. Cancellation and reassignment are locked.</p>}</>}
       </>}</section></div>
-    <div className="passenger-demo"><span><b>Trying the capacity switch?</b> After loading it from the dashboard, request UP on floor 4, then add the surge while paused.</span><button className="secondary" onClick={() => void command('scenario', { name: 'surge' })}>Add lobby surge &amp; advance 2s</button></div>
+    {operator && <div className="passenger-demo"><span><b>Trying the capacity switch?</b> After loading it from the dashboard, request UP on floor 4, then add the surge while paused.</span><button className="secondary" onClick={() => void command('scenario', { name: 'surge' })}>Add lobby surge &amp; advance 2s</button></div>}
     <div className="section-heading"><div><h2>Your building’s lifts</h2><p>Every scheduled stop, from the same live state as the control centre.</p></div><span className="subtle-badge">LIVE ROUTES</span></div>
     <div className="lift-grid">{state.cars.map((lift, i) => <LiftPanel key={lift.id} car={lift} index={i} state={state} />)}</div>
     <section className="panel notifications"><PanelTitle eyebrow="IN-APP NOTIFICATIONS" title="Journey updates" /><div className="event-list">{state.events.filter(e => e.requestId && mine.some(r => r.id === e.requestId)).map(e => <div className="event" key={e.sequence}><span className="event-icon">↗</span><div>{e.message}</div><time>{clock(e.at)}</time></div>)}{!mine.length && <p className="muted">Your request, assignment and arrival updates will appear here.</p>}</div></section>
