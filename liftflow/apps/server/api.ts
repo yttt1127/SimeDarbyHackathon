@@ -5,11 +5,11 @@ import { resolve, extname, sep } from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Simulation } from '../../packages/simulation/engine';
 import type { Config } from '../../packages/shared/types';
-import { checkOperatorPassword, checkOrigin, resolveRuntimeConfig, type RuntimeConfig } from './runtime';
+import { checkOrigin, resolveRuntimeConfig, type RuntimeConfig } from './runtime';
 
 export function createApp(initial = new Simulation(), runtime: RuntimeConfig = resolveRuntimeConfig(process.env)) {
   let simulation = initial;
-  const sessions = new Map<string, { sessionId: string; operator: boolean; failedLogins: number }>();
+  const sessions = new Map<string, string>();
   const sockets = new WebSocketServer({ noServer: true });
   const json = (response: ServerResponse, status: number, data: unknown) => {
     response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -49,35 +49,18 @@ export function createApp(initial = new Simulation(), runtime: RuntimeConfig = r
       if (request.method === 'GET' && url.pathname === '/api/events') return json(response, 200, simulation.events);
       if (request.method === 'POST' && url.pathname === '/api/session') {
         const token = randomUUID(), sessionId = randomUUID();
-        const operator = !runtime.publicMode;
-        sessions.set(token, { sessionId, operator, failedLogins: 0 });
-        return json(response, 200, { token, sessionId, operator });
+        sessions.set(token, sessionId);
+        return json(response, 200, { token, sessionId });
       }
       if (url.pathname.startsWith('/api/')) {
         const token = request.headers['x-session-token'];
         if (typeof token !== 'string' || !sessions.has(token)) return json(response, 401, { error: 'Session expired; reload the app' });
-        const session = sessions.get(token)!;
-        const sessionId = session.sessionId;
-        if (request.method === 'GET' && url.pathname === '/api/operator/me')
-          return json(response, 200, { operator: session.operator });
+        const sessionId = sessions.get(token)!;
         if (request.method === 'GET' && url.pathname === '/api/alternatives') {
           return json(response, 200, simulation.alternatives(sessionId, url.searchParams.get('id') ?? ''));
         }
         if (request.method !== 'POST') return json(response, 404, { error: 'Route not found' });
         const data = await body(request);
-        if (url.pathname === '/api/operator/login') {
-          if (session.failedLogins >= 5) return json(response, 429, { error: 'Too many failed attempts in this session. Open a new session to try again.' });
-          const password = string(data, 'password');
-          if (!checkOperatorPassword(password, runtime)) {
-            session.failedLogins++;
-            return json(response, 403, { error: 'Operator password is incorrect' });
-          }
-          session.operator = true;
-          session.failedLogins = 0;
-          return json(response, 200, { operator: true });
-        }
-        if (['/api/passengers', '/api/traffic', '/api/control', '/api/config', '/api/scenario'].includes(url.pathname) && !session.operator)
-          return json(response, 403, { error: 'Operator access required' });
         let result: unknown = { ok: true };
         switch (url.pathname) {
           case '/api/request': result = simulation.requestDirection(sessionId, numeric(data, 'origin'), string(data, 'direction')); break;

@@ -12,9 +12,9 @@ describe('deployment runtime', () => {
     for (const PORT of ['0', '-1', '1.5', '65536', 'abc'])
       expect(() => resolveRuntimeConfig({ PORT })).toThrow('PORT');
   });
-  it('normalizes exact HTTPS production origins and fails closed without operator setup', () => {
+  it('normalizes exact HTTPS production origins and runs without operator password', () => {
     const environment = { RENDER: 'true', PORT: '4701', RENDER_EXTERNAL_URL: 'https://liftflow.example.test/',
-      LIFTFLOW_PUBLIC_ORIGIN: 'https://demo.example.test/path/', LIFTFLOW_OPERATOR_PASSWORD: 'example-only-long-test-passphrase' };
+      LIFTFLOW_PUBLIC_ORIGIN: 'https://demo.example.test/path/' };
     const config = resolveRuntimeConfig(environment);
     expect(config.host).toBe('0.0.0.0');
     expect(config.port).toBe(4701);
@@ -24,8 +24,8 @@ describe('deployment runtime', () => {
     expect(checkOrigin('https://evil.example.test', config)).toBe(false);
     expect(checkOrigin('https://liftflow.example.test.evil', config)).toBe(false);
     expect(checkOrigin('https://liftflow.example.test/', config)).toBe(false);
-    expect(() => resolveRuntimeConfig({ ...environment, LIFTFLOW_OPERATOR_PASSWORD: '' })).toThrow('LIFTFLOW_OPERATOR_PASSWORD');
+    expect(resolveRuntimeConfig({ ...environment, LIFTFLOW_OPERATOR_PASSWORD: '' }).publicMode).toBe(true);
     expect(() => resolveRuntimeConfig({ ...environment, RENDER_EXTERNAL_URL: 'http://liftflow.example.test' })).toThrow('HTTPS');
-    expect(() => resolveRuntimeConfig({ RENDER: 'true', LIFTFLOW_OPERATOR_PASSWORD: environment.LIFTFLOW_OPERATOR_PASSWORD })).toThrow('RENDER_EXTERNAL_URL');
+    expect(() => resolveRuntimeConfig({ RENDER: 'true', LIFTFLOW_PUBLIC_MODE: '1' })).toThrow('RENDER_EXTERNAL_URL');
   });
 });

@@ -1,10 +1,8 @@
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
 import { WebSocket } from 'ws';
 
 const origin = 'https://liftflow-smoke.example.test';
-const password = randomBytes(32).toString('hex');
 const socket = createServer();
 await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve));
 const { port } = socket.address();
@@ -12,7 +10,7 @@ await new Promise(resolve => socket.close(resolve));
 const base = `http://127.0.0.1:${port}`;
 const child = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'apps/server/index.ts'], {
   cwd: process.cwd(), env: { ...process.env, PORT: String(port), RENDER: 'true', RENDER_EXTERNAL_URL: origin,
-    LIFTFLOW_OPERATOR_PASSWORD: password }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+    }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
 });
 let output = '';
 child.stdout.on('data', chunk => { output += chunk.toString(); });
@@ -39,10 +37,10 @@ try {
   }
   check(!(await fetch(`${base}/api/state`, { headers: { Origin: 'https://invalid.example.test' } })).ok, 'Invalid HTTP origin accepted');
   const session = await (await fetch(`${base}/api/session`, { method: 'POST', headers: { Origin: origin } })).json();
-  check(session.operator === false, 'Anonymous session has operator access');
+  check(typeof session.token === 'string', 'Session token is missing');
   const headers = { Origin: origin, 'Content-Type': 'application/json', 'X-Session-Token': session.token };
   const post = (route, body) => fetch(`${base}/api/${route}`, { method: 'POST', headers, body: JSON.stringify(body) });
-  check((await post('control', { action: 'reset' })).status === 403, 'Anonymous control was accepted');
+  check((await post('control', { action: 'reset' })).ok, 'Demo control failed');
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, { origin });
   await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });
   const update = new Promise((resolve, reject) => {
@@ -57,9 +55,8 @@ try {
   ws.close();
   const rejected = new WebSocket(`ws://127.0.0.1:${port}/ws`, { origin: 'https://invalid.example.test' });
   await new Promise(resolve => rejected.once('error', resolve));
-  check((await post('operator/login', { password })).ok, 'Operator login failed');
-  check((await post('control', { action: 'reset' })).ok, 'Authorized control failed');
-  console.log('Production-style smoke passed: port, both pages, assets, state, WebSocket, passenger request, origin checks, operator access.');
+  check((await post('operator/login', { password: 'unused' })).status === 404, 'Operator login should be removed');
+  console.log('Production-style smoke passed: port, both pages, assets, state, WebSocket, passenger request, origin checks and passwordless controls.');
 } finally {
   child.kill();
 }

@@ -34,12 +34,11 @@ The repository root contains `liftflow/`; `package.json` is inside that director
 | Root Directory | `liftflow` |
 | Build Command | `npm ci && npm run build` |
 | Start Command | `npm start` |
-| Environment secret | `LIFTFLOW_OPERATOR_PASSWORD` = a unique random password of at least 16 characters |
 | Node version | Node.js 22 or newer (`NODE_VERSION=22` if the service does not already use it) |
 
-Set **Root Directory** in the Render dashboard. A GitHub commit alone does not change an existing service's root setting. Render supplies `PORT`, `RENDER` and `RENDER_EXTERNAL_URL`; `PORT` selects the listener, and the exact HTTPS origin in `RENDER_EXTERNAL_URL` is accepted for browser HTTP and WebSocket connections. You do not need to hardcode the Render URL or port. If using an additional custom HTTPS origin, set `LIFTFLOW_PUBLIC_ORIGIN` to that origin. The server rejects all other browser origins. Public mode refuses to start without a valid HTTPS origin and operator password.
+Set **Root Directory** in the Render dashboard. A GitHub commit alone does not change an existing service's root setting. Render supplies `PORT`, `RENDER` and `RENDER_EXTERNAL_URL`; `PORT` selects the listener, and the exact HTTPS origin in `RENDER_EXTERNAL_URL` is accepted for browser HTTP and WebSocket connections. You do not need to hardcode the Render URL or port. If using an additional custom HTTPS origin, set `LIFTFLOW_PUBLIC_ORIGIN` to that origin. The server rejects all other browser origins. Public mode requires an HTTPS origin, but no operator password.
 
-Render terminates HTTPS; the app's browser code chooses `wss://` on HTTPS and `ws://` on HTTP. The frontend uses same-origin `/api` and `/ws` paths. Open the dashboard and enter the operator password to unlock reset, scenario, passenger generation, speed and configuration controls. Public visitors can see live routes and use their own UP/DOWN, cancellation and alternative requests without operator access. Keep the operator password only in Render's environment settings, never in Git or the browser bundle.
+Render terminates HTTPS; the app's browser code chooses `wss://` on HTTPS and `ws://` on HTTP. The frontend uses same-origin `/api` and `/ws` paths. The dashboard and passenger app have no password screen. **Warning:** the public site uses one shared simulation, and any visitor can reset it, change settings or interrupt another visitor's demonstration. This must not be used to operate a real building.
 
 If using Render's Free web service, the service can spin down after 15 minutes without inbound traffic and may take about a minute to wake. Simulation state, requests and session grants live only in memory, so a spin-down, restart or redeploy resets them. The Free plan also has usage limits and no persistent disk. Confirm the service's **Deploys** page shows a successful deploy; a GitHub push alone does not verify the site. See [Render's free-service limits](https://render.com/docs/free) and [monorepo root-directory guidance](https://render.com/docs/monorepo-support).
 
@@ -83,7 +82,7 @@ node tests/production-smoke.mjs
 - Vitest covers the simulator, scheduling, ETA, information boundaries, prediction, ownership, live propagation and end-to-end API scenario.
 - Playwright launches headless Microsoft Edge and uses the production build. If no server is running, it starts one automatically.
 - Browser checks cover desktop and 375/390 px mobile widths, complete routes in two independent sessions, the alternative flow, manual creation, cancellation, stepping, pausing, and JavaScript errors.
-- The production-style smoke script starts a temporary public-mode server on an environment-defined port with a synthetic HTTPS origin and one-time operator password. It checks both pages, assets, API state, live WebSocket updates, passenger requests, origin rejection and operator authorization without contacting Render.
+- The production-style smoke script starts a temporary public-mode server on an environment-defined port with a synthetic HTTPS origin without any operator password. It checks both pages, assets, API state, live WebSocket updates, passenger requests, origin rejection and passwordless controls without contacting Render.
 - Browser tests reset the local simulation. Do not run them during a live demonstration.
 - If Edge is unavailable, install Playwright Chromium (`npx playwright install chromium`) and remove `channel: 'msedge'` from `playwright.config.ts`.
 
@@ -104,4 +103,4 @@ tests/browser/       real-browser interaction and synchronization tests
 docs/                architecture, assumptions, limitations and screenshots
 ```
 
-Data is in memory. Reset, applying settings, or restarting the server clears simulation data. A browser session can change only its own passenger requests. Public operator access is protected by an environment-configured password; it is prototype access control, not a full account system.
+Data is in memory. Reset, applying settings, or restarting the server clears simulation data. A browser session can change only its own passenger requests. The public hackathon demo has no operator authentication. Every visitor can change the shared simulation; this is not a production security model.

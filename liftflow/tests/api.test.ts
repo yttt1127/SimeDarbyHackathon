@@ -61,32 +61,29 @@ describe('M2/M5 · API integration', () => {
     expect((await f.post('control', { action: 'reset' })).status).toBe(200);
     expect(f.app.simulation.requests).toHaveLength(0);
   });
-  it('keeps passenger calls open while protecting public operator actions and both origin paths', async () => {
+  it('allows passwordless demo controls while preserving origin and session checks', async () => {
     const origin = 'https://liftflow.example.test';
-    const runtime = resolveRuntimeConfig({ RENDER: 'true', RENDER_EXTERNAL_URL: origin,
-      LIFTFLOW_OPERATOR_PASSWORD: 'example-only-long-test-passphrase' });
+    const runtime = resolveRuntimeConfig({ RENDER: 'true', RENDER_EXTERNAL_URL: origin });
     const f = await fixture(runtime);
-    const browserPost = async (path: string, data: unknown) => fetch(`${f.base}/api/${path}`, {
-      method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-Session-Token': f.token }, body: JSON.stringify(data),
+    const browserPost = (path: string, data: unknown, token = f.token) => fetch(`${f.base}/api/${path}`, {
+      method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-Session-Token': token }, body: JSON.stringify(data),
     });
     expect((await fetch(`${f.base}/api/state`, { headers: { Origin: origin } })).status).toBe(200);
     expect((await fetch(`${f.base}/api/state`, { headers: { Origin: 'https://other.example' } })).status).toBe(403);
-    expect((await browserPost('request', { origin: 4, direction: 'UP' })).status).toBe(200);
-    for (const path of ['control', 'config', 'scenario', 'passengers', 'traffic'])
-      expect((await browserPost(path, {})).status).toBe(403);
-    expect((await browserPost('operator/login', { password: 'wrong' })).status).toBe(403);
-    expect((await browserPost('control', { action: 'reset' })).status).toBe(403);
-    expect((await browserPost('operator/login', { password: 'example-only-long-test-passphrase' })).status).toBe(200);
     expect((await browserPost('control', { action: 'reset' })).status).toBe(200);
-    expect(await (await fetch(`${f.base}/api/operator/me`, { headers: { Origin: origin, 'X-Session-Token': f.token } })).json()).toEqual({ operator: true });
+    expect((await browserPost('scenario', { name: 'capacity' })).status).toBe(200);
+    expect((await browserPost('request', { origin: 4, direction: 'UP' })).status).toBe(200);
+    expect((await browserPost('control', { action: 'reset' }, 'invalid')).status).toBe(401);
+    expect((await browserPost('operator/login', { password: 'something' })).status).toBe(404);
     const connected = new WebSocket(f.ws, { origin });
-    await new Promise<void>((resolve, reject) => { connected.once('open', () => resolve()); connected.once('error', reject); });
+    await new Promise<void>((resolve, reject) => { connected.once('open', resolve); connected.once('error', reject); });
     const next = new Promise<Snapshot>(resolve => connected.once('message', data => resolve(JSON.parse(data.toString()))));
     f.app.broadcast();
     expect((await next).cars).toHaveLength(2);
     connected.close();
     const rejected = new WebSocket(f.ws, { origin: 'https://other.example' });
-    await new Promise<void>(resolve => { rejected.once('error', () => resolve()); });
+    await new Promise<void>(resolve => rejected.once('error', resolve));
     expect(rejected.readyState).not.toBe(WebSocket.OPEN);
   });
+
 });
