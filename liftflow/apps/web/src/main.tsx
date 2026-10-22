@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { CarView, Config, Snapshot } from '../../../packages/shared/types';
 import { useLive } from './live';
@@ -17,9 +17,14 @@ function App() {
   const [view, setView] = useState(location.pathname === '/dashboard' ? 'dashboard' : 'passenger');
   const [addOpen, setAddOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const commandPending = useRef(false);
+  const lastTraffic = useRef(-Infinity);
   const command: Command = async (path, data) => {
+    if (commandPending.current || (path === 'traffic' && performance.now() - lastTraffic.current < 600)) return false;
+    commandPending.current = true;
+    if (path === 'traffic') lastTraffic.current = performance.now();
     setBusy(true);
-    try { return await live.command(path, data); } finally { setBusy(false); }
+    try { const ok = await live.command(path, data); if (!ok && path === 'traffic') lastTraffic.current = -Infinity; return ok; } finally { commandPending.current = false; setBusy(false); }
   };
   useEffect(() => {
     const listener = () => setView(location.pathname === '/dashboard' ? 'dashboard' : 'passenger');
@@ -44,6 +49,7 @@ function App() {
       <main>
         <div className="page-heading"><div><div className="eyebrow">LIFTFLOW / {view === 'dashboard' ? 'CONTROL CENTRE' : 'YOUR JOURNEY'}</div><h1>{view === 'dashboard' ? 'A better view of every lift.' : 'Your next ride, in view.'}</h1><p>{view === 'dashboard' ? 'Follow the movement. Understand the capacity. Keep people moving.' : 'Choose your floor and we’ll find a lift for your journey.'}</p></div><span className="prototype-badge">SIMULATION PROTOTYPE <span>↗</span></span></div>
         {live.error && <div className="error" role="alert">{live.error}<button aria-label="Dismiss error" onClick={() => live.setError('')}>×</button></div>}
+        {live.feedback && <div className="notice" role="status">{live.feedback}</div>}
         {!live.connected && state && <div className="warning">Connection lost. Displayed state is stale; controls are disabled until reconnection.</div>}
         {!state ? <div className="loading"><Mark /><h2>Connecting your building…</h2><p>Waiting for the authoritative simulator state.</p></div> :
           <fieldset className="app-fieldset" disabled={!live.connected || busy}>
@@ -61,7 +67,7 @@ function App() {
         <footer><span>Liftflow <b>V0.2</b> · A functional simulation, one floor at a time.</span><span>Headcounts estimate comfort, not weight or certified load capacity.</span></footer>
       </main>
     </div>
-    {addOpen && state && <AddPassenger floors={state.config.floors} command={command} close={() => setAddOpen(false)} />}
+    {addOpen && state && <AddPassenger floors={state.config.floors} error={live.error} connected={live.connected} command={command} close={() => setAddOpen(false)} />}
   </div>;
 }
 function PanelTitle({ eyebrow, title, extra }: { eyebrow: string; title: string; extra?: React.ReactNode }) {
@@ -98,6 +104,7 @@ function Controls({ state, command, onAdd }: { state: Snapshot; command: Command
     <label className="inline-label">Playback speed<select aria-label="Playback speed" value={state.speed} onChange={e => void command('control', { action: state.running ? 'resume' : 'pause', speed: Number(e.target.value) })}>{[0.5, 1, 2, 4, 8].map(speed => <option key={speed} value={speed}>{speed}× speed</option>)}</select></label>
     <div className="divider" />
     <div className="tiny-label">MAKE IT MOVE</div>
+    <p className="traffic-status" role="status"><strong data-testid="pending-arrivals">{state.pendingArrivals ?? 0}</strong> scheduled arrivals pending · {state.running ? 'arriving over time' : 'paused'}<br /><small>Generate traffic starts the simulator. Pause stops future arrivals.</small></p>
     <div className="control-buttons"><button className="secondary" onClick={onAdd}>＋ Add passengers</button><button className="secondary" onClick={() => void command('traffic', { count: 8, pattern: 'off-peak' })}>↗ Generate traffic</button></div>
     <div className="scenario-box"><span className="tiny-label">DEMONSTRATION SCENARIO</span><div className="scenario-select"><select aria-label="Demonstration scenario" value={scenario} onChange={e => setScenario(e.target.value)}><option value="capacity">01 — Capacity switch</option><option value="morning">02 — Morning · down-peak</option><option value="evening">03 — Evening · up-peak</option><option value="off-peak">04 — Off-peak residential</option><option value="heavy">05 — Heavy residential traffic</option></select><button className="primary" onClick={() => void command('scenario', { name: scenario })}>Load</button></div><p>{scenario === 'capacity' ? 'A real boarding surge changes which lift is the better choice.' : 'Seeded residential arrivals over simulated time. Press Start to run.'}</p></div>
     <details className="demo-guide"><summary>Run the capacity demonstration <span>↗</span></summary><ol><li>Load “Capacity switch” (resets the simulation).</li><li>Open ZeroWait. Use Demo Floor 04, call a lift and choose UP.</li><li>Keep the simulation paused. Add the lobby surge below.</li><li>Watch ZeroWait update the assignment after a full-load bypass, then resume.</li></ol><button className="secondary full" onClick={() => void command('scenario', { name: 'surge' })}>Add lobby surge &amp; advance 2s</button></details>
@@ -143,9 +150,21 @@ function Settings({ config, command }: { config: Config; command: Command }) {
     <button className="secondary full" type="submit">Apply settings &amp; reset</button>
   </form>;
 }
-function AddPassenger({ floors, command, close }: { floors: number; command: Command; close: () => void }) {
+function AddPassenger({ floors, command, close, error, connected }: { floors: number; command: Command; close: () => void; error: string; connected: boolean }) {
   const [origin, setOrigin] = useState(1), [destination, setDestination] = useState(floors), [count, setCount] = useState(1);
   const [sending, setSending] = useState(false);
-  return <div className="modal-backdrop"><section className="panel modal" role="dialog" aria-modal="true" aria-labelledby="add-title"><button className="close-modal" onClick={close} aria-label="Close dialog">×</button><div className="eyebrow">CREATE A JOURNEY</div><h2 id="add-title">People make the building move.</h2><p>Destinations are private simulation truth until boarding registers a car call.</p><form onSubmit={async e => { e.preventDefault(); setSending(true); if (await command('passengers', { origin, destination, count })) close(); setSending(false); }}><div className="settings-grid"><label>Origin floor<input autoFocus type="number" min={1} max={floors} value={origin} onChange={e => setOrigin(Number(e.target.value))} required /></label><label>Destination floor<input type="number" min={1} max={floors} value={destination} onChange={e => setDestination(Number(e.target.value))} required /></label><label>Passengers<input type="number" min={1} max={100} value={count} onChange={e => setCount(Number(e.target.value))} required /></label></div>{origin === destination && <p className="warning">Choose a different destination floor.</p>}<button disabled={sending || origin === destination} className="primary full">Add {count} {count === 1 ? 'passenger' : 'passengers'}</button></form></section></div>;
+  const pending = useRef(false);
+  const [validation, setValidation] = useState('');
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (pending.current || !connected) return;
+    if (![origin, destination, count].every(Number.isInteger) || origin < 1 || origin > floors || destination < 1 || destination > floors || count < 1 || count > 100 || origin === destination) {
+      setValidation(`Choose distinct floors from 1 to ${floors} and a whole passenger count from 1 to 100.`); return;
+    }
+    setValidation(''); pending.current = true; setSending(true);
+    try { if (await command('passengers', { origin, destination, count })) close(); }
+    finally { pending.current = false; setSending(false); }
+  };
+  return <div className="modal-backdrop"><section className="panel modal" role="dialog" aria-modal="true" aria-labelledby="add-title"><button className="close-modal" onClick={close} aria-label="Close dialog">×</button><div className="eyebrow">CREATE A JOURNEY</div><h2 id="add-title">People make the building move.</h2><p>Passengers join the waiting queue immediately, even while paused.</p><form noValidate onSubmit={submit}><div className="settings-grid"><label>Origin floor<input autoFocus type="number" min={1} max={floors} value={origin} onChange={e => setOrigin(Number(e.target.value))} required /></label><label>Destination floor<input type="number" min={1} max={floors} value={destination} onChange={e => setDestination(Number(e.target.value))} required /></label><label>Passengers<input type="number" min={1} max={100} value={count} onChange={e => setCount(Number(e.target.value))} required /></label></div>{(validation || error) && <p className="warning" role="alert">{validation || error}</p>}{!connected && <p role="status">Reconnecting. Please wait before adding passengers.</p>}<button disabled={sending || !connected} className="primary full">{sending ? 'Adding passengers…' : `Add ${count} ${count === 1 ? 'passenger' : 'passengers'}`}</button></form></section></div>;
 }
 createRoot(document.getElementById('root')!).render(<App />);

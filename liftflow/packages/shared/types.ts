@@ -44,6 +44,7 @@ export interface SimEvent { sequence: number; at: number; type: EventType; messa
 export interface CarView extends KnownCar { actualOccupancy: number; stops: ForecastStop[] }
 export interface Snapshot {
   revision: number; now: number; running: boolean; speed: number; config: Config;
+  pendingArrivals: number;
   cars: CarView[]; requests: Request[]; passengers: { id: string; status: PassengerStatus; elevatorId?: string }[];
   lobbies: { floor: number; actual: number; observation: Observation }[];
   events: SimEvent[];

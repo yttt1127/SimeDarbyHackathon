@@ -19,6 +19,32 @@ async function fixture(runtime?: RuntimeConfig) {
   return { app, base, token, post, ws: `ws://127.0.0.1:${address.port}/ws` };
 }
 describe('M2/M5 · API integration', () => {
+  it('creates immediately while paused and broadcasts scheduled traffic before resuming', async () => {
+    const f = await fixture();
+    const added = await f.post('passengers', { origin: 3, destination: 8, count: 2 });
+    expect(added.body).toMatchObject({ created: 2, message: 'Added 2 passengers at floor 3.' });
+    expect(f.app.simulation.running).toBe(false);
+    expect(f.app.simulation.requests.filter(r => r.status === 'waiting')).toHaveLength(2);
+    const socket = new WebSocket(f.ws);
+    await new Promise<void>(resolve => socket.once('message', () => resolve()));
+    const update = new Promise<Snapshot>(resolve => socket.once('message', data => resolve(JSON.parse(data.toString()))));
+    const generated = await f.post('traffic', { count: 8, pattern: 'morning' });
+    expect(generated.body).toMatchObject({ scheduled: 8, message: 'Scheduled 8 residential arrivals. Simulation running.' });
+    expect(await update).toMatchObject({ pendingArrivals: 8, running: true });
+    await f.post('control', { action: 'pause' });
+    expect(f.app.simulation.snapshot().pendingArrivals).toBe(8);
+    await f.post('control', { action: 'reset' });
+    expect(f.app.simulation.snapshot()).toMatchObject({ pendingArrivals: 0, running: false, requests: [] });
+    for (const data of [{ origin: 3, destination: 3, count: 2 }, { origin: 3, destination: 8, count: 101 }]) {
+      const invalid = await f.post('passengers', data);
+      expect(invalid.status).toBe(400);
+      expect(invalid.body.error).toBeTruthy();
+    }
+    expect(f.app.simulation.requests).toHaveLength(0);
+    expect((await f.post('traffic', { count: 0, pattern: 'morning' })).status).toBe(400);
+    expect(f.app.simulation.running).toBe(false);
+    socket.close();
+  });
   it('broadcasts identical updates to two independent views and enforces ownership', async () => {
     const f = await fixture();
     const dashboard = new WebSocket(f.ws), passenger = new WebSocket(f.ws);

@@ -78,7 +78,7 @@ export class Simulation {
     const knowledge = this.knowledge();
     const counts = this.counts();
     const frame = this.sensor.observe(counts);
-    return { revision: this.revision, now: this.now, running: this.running, speed: this.speed, config: { ...this.config },
+    return { revision: this.revision, now: this.now, running: this.running, speed: this.speed, config: { ...this.config }, pendingArrivals: this.arrivals.length,
       cars: knowledge.cars.map(c => ({ ...c, actualOccupancy: this.cars.find(a => a.id === c.id)!.onboard.length,
         stops: forecast(c, this.scheduler.plan(c, knowledge.requests), knowledge) })),
       requests: structuredClone(this.requests),

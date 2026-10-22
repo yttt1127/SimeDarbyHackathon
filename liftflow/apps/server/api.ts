@@ -71,12 +71,17 @@ export function createApp(initial = new Simulation(), runtime: RuntimeConfig = r
             if (!Number.isInteger(count) || count < 1 || count > 100) throw new Error('Count must be 1–100');
             const origin = numeric(data, 'origin'), destination = numeric(data, 'destination');
             for (let i = 0; i < count; i++) simulation.addPassenger('operator', origin, destination);
+            result = { ok: true, created: count, message: `Added ${count} ${count === 1 ? 'passenger' : 'passengers'} at floor ${origin}.` };
             break;
           }
           case '/api/traffic': {
             const pattern = data.pattern ?? 'mixed';
             if (!['mixed', 'up-peak', 'morning', 'evening', 'off-peak', 'heavy'].includes(String(pattern))) throw new Error('Unknown traffic pattern');
-            simulation.generate(numeric(data, 'count'), pattern as Parameters<Simulation['generate']>[1]); break;
+            const count = numeric(data, 'count');
+            simulation.generate(count, pattern as Parameters<Simulation['generate']>[1]);
+            simulation.control('resume');
+            result = { ok: true, scheduled: count, message: `Scheduled ${count} residential arrivals. Simulation running.` };
+            break;
           }
           case '/api/control': {
             const action = string(data, 'action');
