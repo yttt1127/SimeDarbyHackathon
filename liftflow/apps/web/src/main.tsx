@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Candidate, CarView, Config, Snapshot } from '../../../packages/shared/types';
+import type { CarView, Config, Snapshot } from '../../../packages/shared/types';
 import { useLive } from './live';
 import './style.css';
+import { PassengerApp } from './PassengerApp';
 
 const arrow = (direction: string) => direction === 'UP' ? '↑' : direction === 'DOWN' ? '↓' : '—';
 const clock = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
@@ -26,6 +27,7 @@ function App() {
   }, []);
   const navigate = (next: string) => { setView(next); history.pushState({}, '', next === 'passenger' ? '/passenger' : '/'); };
   const state = live.state;
+  if (view === 'passenger') return state ? <PassengerApp state={state} session={live.session} connected={live.connected} busy={busy} error={live.error} command={command} onDashboard={() => navigate('dashboard')} renderDetails={(car, index) => <LiftPanel key={car.id} car={car} index={index} state={state} />} /> : <div className="loading"><Mark /><h2>Connecting ZeroWait…</h2></div>;
   return <div className="app-shell">
     <aside className="sidebar">
       <a href="/" onClick={e => { e.preventDefault(); navigate('dashboard'); }} className="brand"><Mark /><span>liftflow<span className="brand-dot">.</span></span></a>
@@ -54,7 +56,7 @@ function App() {
               <div className="section-heading"><div><h2>Every stop. The full picture.</h2><p>Live route plans with arrival estimates and capacity forecasts.</p></div><span className="subtle-badge">OBSERVED + PREDICTED</span></div>
               <div className="lift-grid">{state.cars.map((car, i) => <LiftPanel key={car.id} car={car} index={i} state={state} />)}</div>
               <div className="bottom-grid"><Activity state={state} /><section className="panel"><PanelTitle eyebrow="MODEL SETTINGS" title="Built to be explored" /><Settings config={state.config} command={command} /></section></div>
-            </> : <Passenger state={state} session={live.session} command={command} />}
+            </> : null}
           </fieldset>}
         <footer><span>Liftflow <b>V0.1</b> · A functional simulation, one floor at a time.</span><span>Headcounts estimate comfort, not weight or certified load capacity.</span></footer>
       </main>
@@ -98,7 +100,7 @@ function Controls({ state, command, onAdd }: { state: Snapshot; command: Command
     <div className="tiny-label">MAKE IT MOVE</div>
     <div className="control-buttons"><button className="secondary" onClick={onAdd}>＋ Add passengers</button><button className="secondary" onClick={() => void command('traffic', { count: 8, pattern: 'mixed' })}>↗ Generate traffic</button></div>
     <div className="scenario-box"><span className="tiny-label">DEMONSTRATION SCENARIO</span><div className="scenario-select"><select aria-label="Demonstration scenario" value={scenario} onChange={e => setScenario(e.target.value)}><option value="capacity">01 — Capacity switch</option><option value="morning">02 — Morning arrivals</option><option value="mixed">03 — Mixed floor traffic</option></select><button className="primary" onClick={() => void command('scenario', { name: scenario })}>Load</button></div><p>{scenario === 'capacity' ? 'A real boarding surge changes which lift is the better choice.' : 'Seeded passengers with individual destinations and live schedules.'}</p></div>
-    <details className="demo-guide"><summary>Run the capacity demonstration <span>↗</span></summary><ol><li>Load “Capacity switch” (resets the simulation).</li><li>Open Passenger app. Choose floor 4 and request UP.</li><li>Keep the simulation paused. Add the lobby surge below.</li><li>Accept the alternative in the passenger app, then resume.</li></ol><button className="secondary full" onClick={() => void command('scenario', { name: 'surge' })}>Add lobby surge &amp; advance 2s</button></details>
+    <details className="demo-guide"><summary>Run the capacity demonstration <span>↗</span></summary><ol><li>Load “Capacity switch” (resets the simulation).</li><li>Open ZeroWait. Use Demo Floor 04, call a lift and choose UP.</li><li>Keep the simulation paused. Add the lobby surge below.</li><li>Watch the pickup capacity warning in ZeroWait, then resume.</li></ol><button className="secondary full" onClick={() => void command('scenario', { name: 'surge' })}>Add lobby surge &amp; advance 2s</button></details>
   </div>;
 }
 function LiftPanel({ car, index, state }: { car: CarView; index: number; state: Snapshot }) {
@@ -143,37 +145,4 @@ function AddPassenger({ floors, command, close }: { floors: number; command: Com
   const [sending, setSending] = useState(false);
   return <div className="modal-backdrop"><section className="panel modal" role="dialog" aria-modal="true" aria-labelledby="add-title"><button className="close-modal" onClick={close} aria-label="Close dialog">×</button><div className="eyebrow">CREATE A JOURNEY</div><h2 id="add-title">People make the building move.</h2><p>Destinations are private simulation truth until boarding registers a car call.</p><form onSubmit={async e => { e.preventDefault(); setSending(true); if (await command('passengers', { origin, destination, count })) close(); setSending(false); }}><div className="settings-grid"><label>Origin floor<input autoFocus type="number" min={1} max={floors} value={origin} onChange={e => setOrigin(Number(e.target.value))} required /></label><label>Destination floor<input type="number" min={1} max={floors} value={destination} onChange={e => setDestination(Number(e.target.value))} required /></label><label>Passengers<input type="number" min={1} max={100} value={count} onChange={e => setCount(Number(e.target.value))} required /></label></div>{origin === destination && <p className="warning">Choose a different destination floor.</p>}<button disabled={sending || origin === destination} className="primary full">Add {count} {count === 1 ? 'passenger' : 'passengers'}</button></form></section></div>;
 }
-function Passenger({ state, session, command }: { state: Snapshot; session?: { token: string; sessionId: string }; command: Command }) {
-  const [floor, setFloor] = useState(4);
-  const [alternatives, setAlternatives] = useState<Candidate[]>([]);
-  useEffect(() => setFloor(f => Math.min(f, state.config.floors)), [state.config.floors]);
-  const mine = state.requests.filter(r => r.sessionId === session?.sessionId);
-  const request = [...mine].reverse().find(r => r.status === 'waiting' || r.status === 'onboard');
-  const last = request ?? mine.at(-1);
-  const car = state.cars.find(c => c.id === request?.assignedElevator);
-  const pickup = car?.stops.find(s => !s.serviced && s.pickupIds.includes(request?.id ?? ''));
-  const committed = !!request && car?.committed?.floor === request.origin && car?.committed?.direction === request.direction;
-  useEffect(() => {
-    let disposed = false;
-    if (request?.status === 'waiting' && session) {
-      void fetch(`/api/alternatives?id=${encodeURIComponent(request.id)}`, { headers: { 'X-Session-Token': session.token } })
-        .then(r => r.ok ? r.json() : []).then(value => { if (!disposed) setAlternatives(value); }).catch(() => { if (!disposed) setAlternatives([]); });
-    } else setAlternatives([]);
-    return () => { disposed = true; };
-  }, [state.revision, request?.id, session?.token]);
-  return <>
-    <div className="passenger-grid"><section className="panel request-panel"><div className="eyebrow">LET’S GET YOU THERE</div><h2>Which way are you heading?</h2><p>Your floor is selected manually. No location tracking.</p><label className="floor-select">I’m on floor<select aria-label="Your floor" value={floor} onChange={e => setFloor(Number(e.target.value))}>{Array.from({ length: state.config.floors }, (_, i) => <option key={i + 1} value={i + 1}>{(i + 1).toString().padStart(2, '0')}{i === 0 ? ' — Lobby' : ''}</option>)}</select></label><div className="direction-buttons"><button className="primary" disabled={floor === state.config.floors || !!request} onClick={() => void command('request', { origin: floor, direction: 'UP' })}><span>↑</span>Going up</button><button className="secondary" disabled={floor === 1 || !!request} onClick={() => void command('request', { origin: floor, direction: 'DOWN' })}><span>↓</span>Going down</button></div><p className="small-note">V0.1 assigns a private synthetic destination in your chosen direction. It becomes a car call when you board.</p></section>
-      <section className="panel journey-panel" aria-live="polite"><div className="eyebrow">YOUR JOURNEY</div>{!last ? <div className="journey-empty"><Mark /><h2>A lift is one tap away.</h2><p>Request a ride to see your assignment, arrival estimate and boarding outlook here.</p></div> : <>
-        <div className="journey-header"><h2>{last.status === 'waiting' ? `${last.assignedElevator} is assigned` : last.status === 'onboard' ? `You’re riding ${last.assignedElevator}` : last.status === 'completed' ? 'You’ve arrived.' : 'Request cancelled'}</h2><span className="subtle-badge">{last.id}</span></div>
-        <div className="journey-status"><strong>{last.status === 'waiting' ? pickup ? eta(pickup.eta) : 'Replanning' : last.status === 'onboard' ? 'Onboard' : '✓'}</strong><span>{last.status === 'waiting' ? `Estimated pickup · floor ${last.origin} ${arrow(last.direction)}` : `Journey ${last.status}`}</span></div>
-        {last.status === 'waiting' && pickup && <div className={pickup.availability === 'Likely full' ? 'warning' : 'notice'}>{pickup.availability === 'Likely full' ? 'Likely insufficient boarding space. You may need another lift.' : `${pickup.availability} · ${pickup.spaces} estimated spaces at pickup.`}{pickup.eta <= 8 ? ' Your lift is approaching.' : ''}</div>}
-        {last.status === 'waiting' && <><p className="explanation"><b>At assignment:</b> {last.explanation}</p>{alternatives.map(candidate => <div className="alternative" key={candidate.elevatorId}><span className="tiny-label">A BETTER BOARDING OUTLOOK</span><h3>Consider {candidate.elevatorId} <span>↗</span></h3><p>{candidate.explanation}</p><button className="primary full" onClick={() => void command('reassign', { id: last.id, elevatorId: candidate.elevatorId })}>Accept {candidate.elevatorId}</button></div>)}<button className="text-button" disabled={committed} onClick={() => void command('cancel', { id: last.id })}>Cancel my request</button>{committed && <p className="small-note">Your pickup stop is physically committed. Cancellation and reassignment are locked.</p>}</>}
-      </>}</section></div>
-    <div className="passenger-demo"><span><b>Trying the capacity switch?</b> After loading it from the dashboard, request UP on floor 4, then add the surge while paused.</span><button className="secondary" onClick={() => void command('scenario', { name: 'surge' })}>Add lobby surge &amp; advance 2s</button></div>
-    <div className="section-heading"><div><h2>Your building’s lifts</h2><p>Every scheduled stop, from the same live state as the control centre.</p></div><span className="subtle-badge">LIVE ROUTES</span></div>
-    <div className="lift-grid">{state.cars.map((lift, i) => <LiftPanel key={lift.id} car={lift} index={i} state={state} />)}</div>
-    <section className="panel notifications"><PanelTitle eyebrow="IN-APP NOTIFICATIONS" title="Journey updates" /><div className="event-list">{state.events.filter(e => e.requestId && mine.some(r => r.id === e.requestId)).map(e => <div className="event" key={e.sequence}><span className="event-icon">↗</span><div>{e.message}</div><time>{clock(e.at)}</time></div>)}{!mine.length && <p className="muted">Your request, assignment and arrival updates will appear here.</p>}</div></section>
-  </>;
-}
-
 createRoot(document.getElementById('root')!).render(<App />);
