@@ -24,19 +24,20 @@ At each stop:
 predicted exits = min(predicted arriving occupancy, known destination count)
 before boarding = max(0, arriving occupancy - predicted exits)
 estimated spaces = max(0, comfort threshold - before boarding)
-predicted boarding = min(assigned waiting count, max(0, boarding limit - before boarding))
+hard boarding spaces = max(0, boarding limit - before boarding)
+predicted boarding = min(assigned waiting count, hard boarding spaces)
 after stop = before boarding + predicted boarding
 ```
 
 Unregistered destinations of predicted boarders are conservatively carried through subsequent planned stops. This can overestimate later occupancy and influence assignment; the limitation is visible in the UI. A newly boarded passenger's actual destination becomes a public car call, allowing the next forecast to include that exit.
 
-“Likely full” means spaces plus sensor uncertainty is below waiting demand (at least one prospective passenger). “Likely space available” means spaces minus uncertainty meets that demand. Otherwise the classification is “Uncertain”. These are heuristic classifications, not calibrated probabilities or guarantees.
+“Likely full” means hard boarding spaces plus sensor uncertainty is below waiting demand (at least one prospective passenger). “Likely space available” means spaces minus uncertainty meets that demand. Otherwise the classification is “Uncertain”. These are heuristic classifications, not calibrated probabilities or guarantees.
 
 The mock camera's optional error is a deterministic, bounded function of time, seed and sensor ID. It does not simulate vision inference. The interface reserves optional object-presence and occupied-space fields for later adapters.
 
 ## Capacity-aware assignment
 
-Insert each new hall request into each car's current route. The candidate's pickup position determines its ETA and estimated spaces. Failed-boarding risk is a bounded heuristic:
+Insert each new hall request into each car's current route. The candidate's pickup position determines its ETA and estimated spaces. Comfort-space shortfall risk is a bounded heuristic (the physical boarding limit is checked separately):
 
 ```text
 rank = position in the stop's assigned boarding queue, starting at 1
@@ -46,8 +47,20 @@ score = pickup ETA + riskWeight × risk + delayWeight × additional passenger de
 
 Additional delay sums positive ETA changes for existing hall requests and onboard destination calls on the candidate car. Defaults: `riskWeight = 30` seconds and `delayWeight = 0.25`. Ties use elevator ID for determinism. Weights are configurable and have not been optimized or benchmarked.
 
-Assignments remain stable. An alternative is offered only if the existing request is waiting and uncommitted, assigned risk is at least 0.5, alternative risk is lower, and alternative score improves by more than 3 seconds. Acceptance revalidates the current state. There is no automatic swapping or manufacture of an alternative when none qualifies.
+The legacy explicit alternative API remains available only if the existing request is waiting and uncommitted, assigned risk is at least 0.5, alternative risk is lower, and alternative score improves by more than 3 seconds. Acceptance revalidates the current state. The passenger UI does not expose explicit alternative acceptance. V0.2 automatically coordinates hall groups and bypass service as described below.
 
 ## Cancel/reassign
 
 The API authenticates a local session token to a separate public session ID; tokens are not published in snapshots. Pending requests must belong to that session. Committed pickups and onboard requests cannot be changed. Removing a request recomputes the schedule from remaining hall and car calls. Stops with other valid service remain; eligible removals are logged.
+
+## V0.2 hall coordination and bypass
+
+New requests prefer an existing floor/direction hall visit when conservative predicted hard boarding slots accommodate their queue rank. Otherwise normal ETA/comfort scoring chooses a car. Before dispatch, split groups are consolidated onto the earliest feasible single car only when the entire group fits and no car is already physically committed to that hall stop. Overflow groups remain split. At boarding, compatible waiting requests can also be collected from other assignments when their original car is not committed to their pickup. Transfers update each authoritative request, log a reassignment and preserve its session ownership. Physical boarding still checks the actual hard limit, exits first, and each passenger’s waiting state.
+
+Before dispatch, a car with zero observation uncertainty and enough currently observed riders to fill its hard boarding limit can bypass uncommitted pickup-only stops. Known exits reduce this conservative lower bound; hypothetical future boarders never justify bypass. Requests are deferred behind existing car calls, not deleted. A zero-risk alternative may receive the request automatically; otherwise the original car returns after its registered destinations. Drop-offs and committed stops are never removed. Sensor uncertainty disables this preemptive bypass; physical failed boarding remains deferred to prevent immediate reopen loops.
+
+Deferred hall requests remain part of the finite collective route. Once ordinary calls are consumed, the scheduler returns to the deferred queue. New passengers’ hidden destinations are never used by this coordination, bypass or prediction logic.
+
+## Timed residential arrivals
+
+A private seeded arrival queue advances alongside physical phase events. Morning and evening select their configured down/up lobby share; remaining trips use the opposite lobby flow. Off-peak and heavy choose the configured lobby share, then use distinct residential floors for the remainder. Heavy changes count and gaps, not the residential trip mix. The queue is absent from public snapshots and prediction knowledge. Each arrival becomes an ordinary request only at its scheduled time.

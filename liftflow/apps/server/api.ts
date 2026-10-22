@@ -75,8 +75,8 @@ export function createApp(initial = new Simulation(), runtime: RuntimeConfig = r
           }
           case '/api/traffic': {
             const pattern = data.pattern ?? 'mixed';
-            if (pattern !== 'mixed' && pattern !== 'up-peak') throw new Error('Unknown traffic pattern');
-            simulation.generate(numeric(data, 'count'), pattern); break;
+            if (!['mixed', 'up-peak', 'morning', 'evening', 'off-peak', 'heavy'].includes(String(pattern))) throw new Error('Unknown traffic pattern');
+            simulation.generate(numeric(data, 'count'), pattern as Parameters<Simulation['generate']>[1]); break;
           }
           case '/api/control': {
             const action = string(data, 'action');
@@ -101,8 +101,8 @@ export function createApp(initial = new Simulation(), runtime: RuntimeConfig = r
                 throw new Error('Load Capacity switch, request UP at floor 4 while paused, then add the surge');
               for (let i = 0; i < simulation.config.boardingLimit; i++) simulation.addPassenger('surge', 1, 10);
               simulation.advance(2);
-            } else if (name === 'morning' || name === 'mixed') {
-              simulation.reset(); simulation.generate(18, name === 'morning' ? 'up-peak' : 'mixed');
+            } else if (['morning', 'evening', 'off-peak', 'heavy', 'mixed'].includes(name)) {
+              simulation.reset(); simulation.generate(name === 'heavy' ? 80 : 30, name as Parameters<Simulation['generate']>[1]);
             } else throw new Error('Unknown scenario');
             break;
           }

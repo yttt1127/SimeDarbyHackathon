@@ -14,7 +14,7 @@ function Mark({ small = false }: { small?: boolean }) {
 }
 function App() {
   const live = useLive();
-  const [view, setView] = useState(location.pathname === '/passenger' ? 'passenger' : 'dashboard');
+  const [view, setView] = useState(location.pathname === '/dashboard' ? 'dashboard' : 'passenger');
   const [addOpen, setAddOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const command: Command = async (path, data) => {
@@ -22,22 +22,22 @@ function App() {
     try { return await live.command(path, data); } finally { setBusy(false); }
   };
   useEffect(() => {
-    const listener = () => setView(location.pathname === '/passenger' ? 'passenger' : 'dashboard');
+    const listener = () => setView(location.pathname === '/dashboard' ? 'dashboard' : 'passenger');
     window.addEventListener('popstate', listener); return () => window.removeEventListener('popstate', listener);
   }, []);
-  const navigate = (next: string) => { setView(next); history.pushState({}, '', next === 'passenger' ? '/passenger' : '/'); };
+  const navigate = (next: string) => { setView(next); history.pushState({}, '', next === 'passenger' ? '/' : '/dashboard'); };
   const state = live.state;
   if (view === 'passenger') return state ? <PassengerApp state={state} session={live.session} connected={live.connected} busy={busy} error={live.error} command={command} onDashboard={() => navigate('dashboard')} /> : <div className="loading"><Mark /><h2>Connecting ZeroWait…</h2></div>;
   return <div className="app-shell">
     <aside className="sidebar">
-      <a href="/" onClick={e => { e.preventDefault(); navigate('dashboard'); }} className="brand"><Mark /><span>liftflow<span className="brand-dot">.</span></span></a>
+      <a href="/dashboard" onClick={e => { e.preventDefault(); navigate('dashboard'); }} className="brand"><Mark /><span>liftflow<span className="brand-dot">.</span></span></a>
       <div className="workspace-label">BUILDING INTELLIGENCE</div>
       <nav aria-label="Main navigation">
         <button className={view === 'dashboard' ? 'nav active' : 'nav'} onClick={() => navigate('dashboard')}><span>▦</span> Building overview <span className="nav-arrow">↗</span></button>
         <button className={view === 'passenger' ? 'nav active' : 'nav'} onClick={() => navigate('passenger')}><span>↕</span> Passenger app <span className="nav-arrow">↗</span></button>
       </nav>
       <div className="sidebar-note"><span className="tiny-label">THE VIRTUAL BUILDING</span><strong>One building.<br />Every journey connected.</strong><p>Live movement, visible capacity and a clearer way up.</p><div className="mini-building">{Array.from({ length: 7 }, (_, i) => <span key={i} />)}</div></div>
-      <div className="sidebar-bottom"><span className="dot" /> Local simulation <span className="version">V0.1</span></div>
+      <div className="sidebar-bottom"><span className="dot" /> Local simulation <span className="version">V0.2</span></div>
     </aside>
     <div className="main-shell">
       <header className="topbar"><div><span className="building-icon">▥</span><strong>Northline Tower</strong><span className="topbar-divider" /> <span>Virtual building</span></div><div className={`connection ${live.connected ? '' : 'offline'}`}><span className="dot" /> {live.connected ? 'Live connection' : 'Reconnecting'}</div></header>
@@ -58,7 +58,7 @@ function App() {
               <div className="bottom-grid"><Activity state={state} /><section className="panel"><PanelTitle eyebrow="MODEL SETTINGS" title="Built to be explored" /><Settings config={state.config} command={command} /></section></div>
             </> : null}
           </fieldset>}
-        <footer><span>Liftflow <b>V0.1</b> · A functional simulation, one floor at a time.</span><span>Headcounts estimate comfort, not weight or certified load capacity.</span></footer>
+        <footer><span>Liftflow <b>V0.2</b> · A functional simulation, one floor at a time.</span><span>Headcounts estimate comfort, not weight or certified load capacity.</span></footer>
       </main>
     </div>
     {addOpen && state && <AddPassenger floors={state.config.floors} command={command} close={() => setAddOpen(false)} />}
@@ -98,9 +98,9 @@ function Controls({ state, command, onAdd }: { state: Snapshot; command: Command
     <label className="inline-label">Playback speed<select aria-label="Playback speed" value={state.speed} onChange={e => void command('control', { action: state.running ? 'resume' : 'pause', speed: Number(e.target.value) })}>{[0.5, 1, 2, 4, 8].map(speed => <option key={speed} value={speed}>{speed}× speed</option>)}</select></label>
     <div className="divider" />
     <div className="tiny-label">MAKE IT MOVE</div>
-    <div className="control-buttons"><button className="secondary" onClick={onAdd}>＋ Add passengers</button><button className="secondary" onClick={() => void command('traffic', { count: 8, pattern: 'mixed' })}>↗ Generate traffic</button></div>
-    <div className="scenario-box"><span className="tiny-label">DEMONSTRATION SCENARIO</span><div className="scenario-select"><select aria-label="Demonstration scenario" value={scenario} onChange={e => setScenario(e.target.value)}><option value="capacity">01 — Capacity switch</option><option value="morning">02 — Morning arrivals</option><option value="mixed">03 — Mixed floor traffic</option></select><button className="primary" onClick={() => void command('scenario', { name: scenario })}>Load</button></div><p>{scenario === 'capacity' ? 'A real boarding surge changes which lift is the better choice.' : 'Seeded passengers with individual destinations and live schedules.'}</p></div>
-    <details className="demo-guide"><summary>Run the capacity demonstration <span>↗</span></summary><ol><li>Load “Capacity switch” (resets the simulation).</li><li>Open ZeroWait. Use Demo Floor 04, call a lift and choose UP.</li><li>Keep the simulation paused. Add the lobby surge below.</li><li>Watch the pickup capacity warning in ZeroWait, then resume.</li></ol><button className="secondary full" onClick={() => void command('scenario', { name: 'surge' })}>Add lobby surge &amp; advance 2s</button></details>
+    <div className="control-buttons"><button className="secondary" onClick={onAdd}>＋ Add passengers</button><button className="secondary" onClick={() => void command('traffic', { count: 8, pattern: 'off-peak' })}>↗ Generate traffic</button></div>
+    <div className="scenario-box"><span className="tiny-label">DEMONSTRATION SCENARIO</span><div className="scenario-select"><select aria-label="Demonstration scenario" value={scenario} onChange={e => setScenario(e.target.value)}><option value="capacity">01 — Capacity switch</option><option value="morning">02 — Morning · down-peak</option><option value="evening">03 — Evening · up-peak</option><option value="off-peak">04 — Off-peak residential</option><option value="heavy">05 — Heavy residential traffic</option></select><button className="primary" onClick={() => void command('scenario', { name: scenario })}>Load</button></div><p>{scenario === 'capacity' ? 'A real boarding surge changes which lift is the better choice.' : 'Seeded residential arrivals over simulated time. Press Start to run.'}</p></div>
+    <details className="demo-guide"><summary>Run the capacity demonstration <span>↗</span></summary><ol><li>Load “Capacity switch” (resets the simulation).</li><li>Open ZeroWait. Use Demo Floor 04, call a lift and choose UP.</li><li>Keep the simulation paused. Add the lobby surge below.</li><li>Watch ZeroWait update the assignment after a full-load bypass, then resume.</li></ol><button className="secondary full" onClick={() => void command('scenario', { name: 'surge' })}>Add lobby surge &amp; advance 2s</button></details>
   </div>;
 }
 function LiftPanel({ car, index, state }: { car: CarView; index: number; state: Snapshot }) {
@@ -134,6 +134,9 @@ function Settings({ config, command }: { config: Config; command: Command }) {
       ['floors', 'Floors', 2, 40, 1], ['elevators', 'Elevators', 1, 6, 1], ['comfort', 'Comfort threshold', 1, 50, 1],
       ['boardingLimit', 'Simulated boarding limit', 1, 50, 1], ['travelSeconds', 'Seconds per floor', 0.5, 30, 0.5],
       ['stopSeconds', 'Seconds per stop', 1, 60, 1], ['sensorError', 'Sensor uncertainty ±', 0, 5, 1],
+      ['morningLobbyShare', 'Morning down-peak share', 0, 1, 0.05],
+      ['eveningLobbyShare', 'Evening up-peak share', 0, 1, 0.05],
+      ['offPeakLobbyShare', 'Off-peak lobby share', 0, 1, 0.05],
       ['seed', 'Traffic seed', 0, 2147483647, 1], ['riskWeight', 'Risk penalty (seconds)', 0, 300, 1],
       ['delayWeight', 'Added delay coefficient', 0, 10, 0.05],
     ] as const).map(([key, label, min, max, step]) => <label key={key}>{label}<input type="number" min={min} max={max} step={step} required value={draft[key]} onChange={e => setDraft({ ...draft, [key]: Number(e.target.value) })} /></label>)}</div>

@@ -1,38 +1,21 @@
-# Verification · 21 October 2026
+# ZeroWait V0.2 verification · 23 October 2026
 
-Final checks on the implemented V0.1:
+- `npm test`: 34 passing tests across five files.
+- `npm run build`: TypeScript checks and Vite production build passed.
+- `npm run test:browser`: five passing Edge browser workflows, including passenger default/alias routes and physical fractional movement with integer display.
+- `node tests/production-smoke.mjs`: Render-style host/port, `/`, `/passenger`, `/dashboard`, static assets, API, WebSocket, origin and session checks passed.
+- Direct simulation smoke: Morning 30/30, Evening 30/30, Off-peak 30/30 and Heavy 80/80 completed after a bounded 1,200 simulated seconds; zero remaining queues and all cars idle. These are functional checks, not performance measurements.
 
-| Check | Result |
-| --- | --- |
-| `npm test` | 22 passing tests across 4 files |
-| `npm run build` | TypeScript strict checking and Vite production build passed |
-| `npm run test:browser` | 2 passing end-to-end workflows in headless Edge |
-| `node tests/production-smoke.mjs` | Public-mode port, pages, assets, API, WebSocket, origin and operator checks passed |
-| Desktop screenshot inspection | Reviewed building view, lift routes, predictions and controls |
-| Mobile screenshot inspection | Reviewed floor selection, capacity warning, alternative and complete routes |
-| Mobile width checks | No document overflow at tested widths of 375 and 390 pixels |
-| Browser JavaScript errors | None observed in the capacity-switch workflow |
+## Focused behavior
 
-## Functional checks
+V0.2 tests cover consolidation of six previously split floor-7 DOWN requests into one visit, overflow demand requiring multiple cars, full-load pickup bypass, retained waiting requests, mandatory floor-8 drop-offs, subsequent service after exits, comfort versus hard boarding limit, conservative handling of uncertainty, commitment under changed observations, independent forecast boarding slots, timed seeded residential distributions, configurable shares and two-floor buildings. Bounded heavy traffic runs across three seeds verify queue retention, no duplicate boarding and eventual completion after demand stops.
 
-**Foundation — 10 tests:** continuous movement between discrete events; matching ETA and physical arrivals; directional ordering and repeat floors; shared request preservation; owner-only cancellation; committed/onboard protection; simulated boarding limit with eventual service after failed boarding; pause/step/reset; seeded reproducibility; drop-off preservation; deferred pickup deduplication; and capacity/lifecycle invariants across five seeded traffic fixtures. Several tests cover multiple invariants.
+Existing cancellation, ownership, movement/ETA, ordering, information-boundary, sensor, session and WebSocket tests remain. The old deterministic surge integration test now asserts automatic bypass/reassignment, as required by V0.2. Legacy explicit-alternative tests use a small uncertain observation fixture to preserve coverage of that API when conservative automatic bypass is intentionally disabled; their ownership and other-request preservation assertions remain.
 
-**Prediction/assignment — 6 tests:** waiting destination privacy; live count and registered destination propagation; sensor uncertainty and occupancy conservation; preference for earlier service when capacity is adequate; actual boarding-driven alternative acceptance; preservation of another passenger's pickup after reassignment.
+## Passenger checks
 
-**API — 4 tests:** identical WebSocket snapshots in two clients, session ownership, payload/configuration validation, the full demonstration through HTTP, and public operator restrictions with exact HTTP/WebSocket origin checks.
+The browser suite verifies current floor/direction, complete compact stop sequences, current-versus-pickup capacity labels, frame capacity classes, lobby waiting counts, backend automatic assignment and subsequent reassignment, accurate pickup ETA, simplified route details, cancellation, missing demo floor, invalid directions, duplicate prevention, error retry, dashboard controls, and document widths from 320 to 1440 pixels. Screenshots were visually inspected for the mobile overview and details.
 
-**Runtime — 2 tests:** local and public bind settings, port validation, configured HTTPS origin normalization and fail-closed operator configuration.
+Artifacts: [overview](screenshots/passenger-redesign.png), [assignment](screenshots/passenger.png), [automatic service update](screenshots/passenger-capacity.png), [direction sheet](screenshots/passenger-direction.png), [simplified full routes](screenshots/passenger-floor-details.png).
 
-**Browser — 2 workflows:** separate dashboard and mobile passenger sessions; real request, surge, recommendation and acceptance; all displayed stop counts matched to backend state; preservation of onboard destinations; manual passenger creation, cancellation, step, pause, and responsive layout.
-
-## Milestone status
-
-M1 foundation passed its initial 8 tests before UI implementation. M2–M4 introduced API integration, shared views, sensors, prediction and recommendation. M5 added browser checks, regression cases, scenario instructions and technical documentation. Deployment checks add three functional/integration tests and a production-style smoke script. Final total: 22 functional/integration tests, 2 browser workflows and 1 production-style smoke run.
-
-Screenshots generated by the final browser run:
-
-- [Dashboard](screenshots/dashboard.png)
-- [Passenger before accepting the alternative](screenshots/passenger-capacity.png)
-- [Passenger after reassignment](screenshots/passenger.png)
-
-These are functional checks, not performance benchmarks. No latency, waiting-time improvement or algorithm superiority is claimed. Test servers were shut down after verification; start the local app using the README instructions.
+No real camera, physical device, live Render deployment or real-world performance benchmark was verified. Test servers shut down after browser verification. Render settings and same-origin HTTP/WebSocket paths are retained.

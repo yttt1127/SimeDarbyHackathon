@@ -50,8 +50,8 @@ describe('M3/M4 · observations, forecasts and recommendations', () => {
     expect(candidates[0].elevatorId).toBe('Lift A');
     expect(candidates[0].risk).toBe(0);
   });
-  it('recommends and accepts an alternative after actual boarding changes capacity', () => {
-    const sim = new Simulation();
+  it('retains explicit alternatives under uncertain observations without aggressive bypass', () => {
+    const sim = new Simulation({ sensorError: 0.1 });
     sim.addPassenger('scenario', 1, 10); sim.advance(2);
     const request = sim.addPassenger('visitor', 4, 9);
     expect(request.assignedElevator).toBe('Lift B');
@@ -71,8 +71,8 @@ describe('M3/M4 · observations, forecasts and recommendations', () => {
     sim.advance(100);
     expect(sim.requests.every(r => r.status === 'completed')).toBe(true);
   });
-  it('preserves another passenger pickup when an alternative is accepted', () => {
-    const sim = new Simulation();
+  it('preserves another passenger pickup when an alternative is accepted under uncertainty', () => {
+    const sim = new Simulation({ sensorError: 0.1 });
     sim.addPassenger('scenario', 1, 10); sim.advance(2);
     const first = sim.addPassenger('visitor', 4, 9);
     const other = sim.addPassenger('other', 4, 8);

@@ -52,14 +52,24 @@ describe('M2/M5 · API integration', () => {
     const request = (await f.post('request', { origin: 4, direction: 'UP' })).body;
     expect(request.assignedElevator).toBe('Lift B');
     expect((await f.post('scenario', { name: 'surge' })).status).toBe(200);
-    const alternatives = await (await fetch(f.base + `/api/alternatives?id=${request.id}`, { headers: { 'X-Session-Token': f.token } })).json();
-    expect(alternatives[0].elevatorId).toBe('Lift A');
-    expect((await f.post('reassign', { id: request.id, elevatorId: 'Lift A' })).status).toBe(200);
+    expect(f.app.simulation.events.some(e => e.type === 'bypass')).toBe(true);
+    expect(f.app.simulation.events.some(e => e.type === 'reassignment' && e.requestId === request.id)).toBe(true);
     const state = await (await fetch(f.base + '/api/state')).json() as Snapshot;
     expect(state.requests.find(r => r.id === request.id)!.assignedElevator).toBe('Lift A');
     expect(state.cars[1].stops.some(s => s.floor === 4)).toBe(false);
     expect((await f.post('control', { action: 'reset' })).status).toBe(200);
     expect(f.app.simulation.requests).toHaveLength(0);
+  });
+  it('loads timed residential scenarios through the existing API', async () => {
+    const f = await fixture();
+    for (const name of ['morning', 'evening', 'off-peak', 'heavy']) {
+      expect((await f.post('scenario', { name })).status).toBe(200);
+      expect(f.app.simulation.requests).toHaveLength(0);
+      f.app.simulation.advance(700);
+      expect(f.app.simulation.requests).toHaveLength(name === 'heavy' ? 80 : 30);
+      expect(f.app.simulation.requests.every(r => r.origin >= 1 && r.origin <= 10)).toBe(true);
+    }
+    expect((await f.post('traffic', { count: 5, pattern: 'invalid' })).status).toBe(400);
   });
   it('allows passwordless demo controls while preserving origin and session checks', async () => {
     const origin = 'https://liftflow.example.test';

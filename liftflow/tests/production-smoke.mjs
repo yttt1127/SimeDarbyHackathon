@@ -29,9 +29,10 @@ try {
   check(ready, `Production-style server did not bind to PORT=${port}: ${output}`);
   check(output.includes(`0.0.0.0:${port}`), 'Server did not bind to the configured public host and port');
   const html = await (await fetch(base, { headers: { Origin: origin } })).text();
-  check(html.includes('Liftflow'), 'Dashboard route did not load');
+  check(html.includes('ZeroWait'), 'Passenger default route did not load');
   const passenger = await (await fetch(`${base}/passenger`, { headers: { Origin: origin } })).text();
-  check(passenger.includes('Liftflow'), 'Passenger route did not load');
+  check(passenger.includes('ZeroWait'), 'Passenger route did not load');
+  check((await fetch(`${base}/dashboard`, { headers: { Origin: origin } })).ok, 'Dashboard route did not load');
   for (const asset of [...html.matchAll(/(?:src|href)="(\/assets\/[^\"]+)"/g)].map(match => match[1])) {
     check((await fetch(base + asset, { headers: { Origin: origin } })).ok, `Static asset failed: ${asset}`);
   }

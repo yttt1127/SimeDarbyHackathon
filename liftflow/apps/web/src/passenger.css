@@ -139,3 +139,15 @@
 .p-capacity-pill{padding:9px 11px;border-radius:20px;white-space:nowrap;font-size:11px}.p-capacity-pill.comfortable{background:#eaf2ff;color:#205ca5}.p-capacity-pill.limited{background:#fff0d9;color:#975016}.p-capacity-pill.full{background:#ffe9ee;color:#ac283b}
 @media(max-width:360px){.p-floor-arrival{align-items:flex-start;flex-direction:column}}
 .p-floor-arrival .p-capacity-pill{width:auto;flex-shrink:0}
+/* V0.2: legible capacity-colored lifts and complete compact routes. */
+.p-shaft{--lift-color:#8c959e;border:1.5px solid var(--lift-color);border-radius:15px;padding:14px 8px}
+.p-shaft.tone-comfortable{--lift-color:#4b9bff}.p-shaft.tone-limited{--lift-color:#ef9a32}.p-shaft.tone-full{--lift-color:#ef6d85}
+.p-shaft.assigned{border-color:var(--lift-color);box-shadow:0 0 0 2px #ffffff35}
+.p-shaft .p-door-frame{border-color:var(--lift-color);background:var(--lift-color);width:64px;height:73px;padding:7px 5px 0;border-width:3px;border-bottom:3px solid var(--lift-color);border-radius:6px;box-shadow:none}
+.p-shaft .p-door-display,.p-shaft .p-call-light{display:none}
+.p-shaft .p-door-opening{border-color:#ffffffb0;border-radius:2px}.p-shaft .p-door-opening i{background:color-mix(in srgb,var(--lift-color) 38%,white)}.p-shaft .p-door-opening i+i{background:color-mix(in srgb,var(--lift-color) 20%,white);border-color:var(--lift-color)}
+.p-car-label{justify-content:center;text-align:center}.p-car-label span{width:100%;font-size:13px}.p-car-label b{margin:8px 0 0;font-size:25px}.p-car-label b em{font-style:normal;font-size:12px;color:#bac0c5;margin-left:2px}.p-car-label small{text-align:center}
+.p-status-context{display:block;margin-top:5px;font-size:8px;color:#abb2b8}.p-upcoming{margin-top:14px}.p-upcoming small{font-size:9px;color:#b7bdc2}.p-upcoming p{font-size:11px;line-height:1.8;margin-top:5px;overflow-wrap:anywhere;color:#e3e5e8}
+.p-main-waiting{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;padding:17px 0;border-bottom:1px solid #eff0f2;font-size:12px;color:#656f79}.p-main-waiting strong{color:#24292e;font-weight:550}.p-main-waiting small{width:100%;font-size:9px;color:#89919a}
+
+.p-shaft .p-car-label small{display:none}.p-shaft .p-door-frame{height:60px;margin-top:10px;margin-bottom:8px}.p-shaft .p-upcoming{margin-top:9px}.p-shaft{padding:10px 8px}.p-shaft .p-movement{margin-top:9px}

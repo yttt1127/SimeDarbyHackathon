@@ -18,6 +18,7 @@ export class Simulation {
   private eventSequence = 0;
   private randomState: number;
   private deferred = new Set<string>();
+  private arrivals: { at: number; origin: number; destination: number }[] = [];
   private sensor: OccupancySensor;
   private assignment: AssignmentPolicy;
   constructor(config: Partial<Config> = {}, private scheduler: SchedulingPolicy = collective, sensor?: OccupancySensor, assignment?: AssignmentPolicy) {
@@ -32,6 +33,7 @@ export class Simulation {
     for (const [key, min, max] of [
       ['floors', 2, 40], ['elevators', 1, 6], ['comfort', 1, 50], ['boardingLimit', 1, 50],
       ['travelSeconds', 0.5, 30], ['stopSeconds', 1, 60], ['riskWeight', 0, 300],
+      ['morningLobbyShare', 0, 1], ['eveningLobbyShare', 0, 1], ['offPeakLobbyShare', 0, 1],
       ['delayWeight', 0, 10], ['sensorError', 0, 5], ['seed', 0, 2147483647],
     ] as const) {
       const value = this.config[key];
@@ -43,6 +45,7 @@ export class Simulation {
   reset() {
     this.now = 0; this.running = false; this.speed = 1;
     this.requests = []; this.passengers = []; this.events = []; this.nextId = 1;
+    this.arrivals = [];
     this.eventSequence = 0; this.randomState = this.config.seed; this.deferred.clear();
     this.cars = Array.from({ length: this.config.elevators }, (_, i) => ({
       id: `Lift ${String.fromCharCode(65 + i)}`, position: 1, direction: 'IDLE', phase: 'IDLE',
@@ -179,10 +182,14 @@ export class Simulation {
     this.dispatch();
     let guard = 0;
     while (true) {
-      const next = Math.min(...this.cars.map(c => c.phaseEnd));
+      const next = Math.min(this.arrivals[0]?.at ?? Infinity, ...this.cars.map(c => c.phaseEnd));
       if (next > target || !Number.isFinite(next)) break;
       if (++guard > 100000) throw new Error('Event loop failed to progress');
       this.moveTo(next);
+      while (this.arrivals.length && this.arrivals[0].at <= this.now + 1e-8) {
+        const arrival = this.arrivals.shift()!;
+        this.addPassenger('synthetic', arrival.origin, arrival.destination);
+      }
       const due = this.cars.filter(c => c.phaseEnd <= this.now + 1e-8);
       for (const car of due) this.transition(car);
       this.dispatch();
@@ -197,7 +204,65 @@ export class Simulation {
       car.position = car.departurePosition + (car.committed!.floor - car.departurePosition) * progress;
     }
   }
+  private consolidateHallDemand() {
+    const groups = new Map<string, Request[]>();
+    for (const r of this.requests.filter(r => r.status === 'waiting')) {
+      const key = `${r.origin}:${r.direction}`;
+      groups.set(key, [...(groups.get(key) ?? []), r]);
+    }
+    for (const group of groups.values()) {
+      if (new Set(group.map(r => r.assignedElevator)).size < 2) continue;
+      const first = group[0];
+      if (this.cars.some(c => c.committed?.floor === first.origin && c.committed.direction === first.direction)) continue;
+      const k = this.knowledge();
+      const ids = new Set(group.map(r => r.id));
+      const others = k.requests.filter(r => !ids.has(r.id));
+      const options = k.cars.flatMap(car => {
+        const requests = [...others, ...group.map(r => ({ ...r, deferred: false, assignedElevator: car.id }))];
+        const stop = forecast(car, this.scheduler.plan(car, requests), { ...k, requests }).find(s => s.pickupIds.includes(first.id));
+        return stop && !stop.serviced && stop.boardingSpaces - car.observation.uncertainty >= group.length ? [{ car, eta: stop.eta }] : [];
+      }).sort((a, b) => a.eta - b.eta || a.car.id.localeCompare(b.car.id));
+      const best = options[0];
+      if (!best) continue;
+      for (const r of group) if (r.assignedElevator !== best.car.id) {
+        r.assignedElevator = best.car.id;
+        r.explanation = 'Automatic assignment to share one compatible hall pickup.';
+        this.deferred.delete(r.id);
+        this.log('reassignment', `${r.id}: shared hall pickup assigned to ${best.car.id}`, r.id, best.car.id);
+      }
+    }
+  }
+  private preparePickups() {
+    // Only a confidently full observed car is bypassed. Hypothetical future
+    // boarders and private waiting destinations never justify bypass decisions.
+    for (const car of this.cars) {
+      const k = this.knowledge();
+      const known = k.cars.find(c => c.id === car.id)!;
+      if (known.observation.uncertainty > 0) continue;
+      let guaranteedOccupancy = known.observation.count;
+      for (const stop of this.scheduler.plan(known, k.requests)) {
+        if (!stop.serviced) guaranteedOccupancy = Math.max(0, guaranteedOccupancy - stop.dropoffIds.length);
+        if (stop.committed || stop.dropoffIds.length || guaranteedOccupancy < this.config.boardingLimit) continue;
+        for (const id of stop.pickupIds) {
+          if (this.deferred.has(id)) continue;
+          this.deferred.add(id);
+          this.log('bypass', `${car.id}: full-load pickup at floor ${stop.floor} deferred`, id, car.id);
+          const request = this.requests.find(r => r.id === id && r.status === 'waiting')!;
+          const candidates = this.assignment.candidates(this.knowledge(), request);
+          const alternative = candidates.find(c => c.elevatorId !== car.id && c.risk === 0);
+          if (alternative) {
+            request.assignedElevator = alternative.elevatorId;
+            request.explanation = 'Automatic service update after full-load bypass. ' + alternative.explanation;
+            this.deferred.delete(id);
+            this.log('reassignment', `${id}: automatically assigned to ${alternative.elevatorId} after bypass`, id, alternative.elevatorId);
+          }
+        }
+      }
+    }
+  }
   private dispatch() {
+    this.consolidateHallDemand();
+    this.preparePickups();
     for (const car of this.cars) {
       if (car.phase !== 'IDLE') continue;
       const knowledge = this.knowledge();
@@ -226,13 +291,27 @@ export class Simulation {
         this.requests.find(r => r.id === passenger.requestId)!.status = 'completed';
         this.log('exit', `${id} exiting ${car.id} at floor ${stop.floor}`, passenger.requestId, car.id);
       }
-      const waiting = this.requests.filter(r => r.status === 'waiting' && r.assignedElevator === car.id && r.origin === stop.floor && r.direction === stop.direction);
+      const waiting = this.requests.filter(r => {
+        if (r.status !== 'waiting' || r.origin !== stop.floor || r.direction !== stop.direction) return false;
+        const other = this.cars.find(c => c.id === r.assignedElevator);
+        // Already committed visits remain physically intact; do not steal their queue.
+        return r.assignedElevator === car.id || !(other?.committed?.floor === r.origin && other.committed.direction === r.direction);
+      }).sort((a, b) => a.createdAt - b.createdAt || Number(a.id.slice(1)) - Number(b.id.slice(1)));
       stop.pickupIds = waiting.map(r => r.id);
       for (const request of waiting) {
         if (car.onboard.length >= this.config.boardingLimit) {
+          if (request.assignedElevator !== car.id) continue;
           this.deferred.add(request.id);
           this.log('failed-boarding', `${request.id} remains waiting: simulated boarding limit reached`, request.id, car.id);
           continue;
+        }
+        if (request.assignedElevator !== car.id) {
+          const oldCar = request.assignedElevator;
+          const oldRoute = this.snapshot().cars.find(c => c.id === oldCar)!.stops;
+          request.assignedElevator = car.id;
+          request.explanation = 'Automatically served with compatible waiting passengers at this floor.';
+          this.log('reassignment', `${request.id}: ${car.id} serving shared floor demand`, request.id, car.id);
+          this.recordRemoval(oldCar, oldRoute);
         }
         const passenger = this.passengers.find(p => p.id === request.passengerId)!;
         passenger.status = 'boarding'; passenger.elevatorId = car.id; request.status = 'onboard';
@@ -251,13 +330,30 @@ export class Simulation {
       car.phase = 'IDLE'; car.phaseEnd = Infinity; car.committed = undefined;
     }
   }
-  generate(count = 8, pattern: 'mixed' | 'up-peak' = 'mixed') {
+  generate(count = 8, pattern: 'mixed' | 'up-peak' | 'morning' | 'evening' | 'off-peak' | 'heavy' = 'mixed') {
     if (!Number.isInteger(count) || count < 1 || count > 100) throw new Error('Generate 1–100 passengers');
+    if (!['mixed', 'up-peak', 'morning', 'evening', 'off-peak', 'heavy'].includes(pattern)) throw new Error('Unknown traffic pattern');
+    const residential = () => 2 + Math.floor(this.random() * (this.config.floors - 1));
+    let at = Math.max(this.now, this.arrivals.at(-1)?.at ?? this.now);
     for (let i = 0; i < count; i++) {
-      const origin = pattern === 'up-peak' ? 1 : 1 + Math.floor(this.random() * this.config.floors);
-      let destination = 1 + Math.floor(this.random() * (this.config.floors - 1));
-      if (destination >= origin) destination++;
-      this.addPassenger('synthetic', origin, destination);
+      const roll = this.random();
+      let origin: number, destination: number;
+      if (pattern === 'morning' && roll < this.config.morningLobbyShare) { origin = residential(); destination = 1; }
+      else if ((pattern === 'evening' || pattern === 'up-peak') && roll < this.config.eveningLobbyShare) { origin = 1; destination = residential(); }
+      else if (pattern === 'morning') { origin = 1; destination = residential(); }
+      else if (pattern === 'evening' || pattern === 'up-peak') { origin = residential(); destination = 1; }
+      else if (roll < this.config.offPeakLobbyShare || this.config.floors === 2) {
+        const home = residential();
+        [origin, destination] = this.random() < 0.5 ? [1, home] : [home, 1];
+      } else {
+        origin = residential();
+        destination = 2 + Math.floor(this.random() * (this.config.floors - 2));
+        if (destination >= origin) destination++;
+      }
+      at += pattern === 'heavy' ? 0.5 + this.random() : 2 + this.random() * 6;
+      this.arrivals.push({ at, origin, destination });
     }
+    this.log('control', `${count} ${pattern} residential arrivals scheduled over simulated time`);
+    this.revision++;
   }
 }
