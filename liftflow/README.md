@@ -55,7 +55,7 @@ If using Render's Free web service, the service can spin down after 15 minutes w
 - Real boarding-driven alternative scenario, seeded mixed traffic and morning arrivals.
 - Timestamped event history, available at `/api/events`. UI shows the most recent 120 events; full history remains in memory until reset.
 
-All stops remain accessible; ZeroWait places its complete routes in the optional Lift details sheet. Long routes extend vertically. Both views use the same live route component. Actual occupancy is labelled separately from observed counts and forecast values. On a stop already in service, ETA is “Now” and values reflect the current service phase.
+The dashboard retains all upcoming stops and numeric forecasts. ZeroWait’s optional Lift details sheet shows only scheduled arrivals at the passenger’s pickup floor (and requested direction after calling), the observed total waiting there across both directions, and colored capacity labels instead of numeric occupancy predictions. Actual occupancy is labelled separately from observed counts and forecast values. On a stop already in service, ETA is “Now” and values reflect the current service phase.
 
 ## Live demonstration: capacity switch
 

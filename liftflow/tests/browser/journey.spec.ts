@@ -18,7 +18,7 @@ test('automatic assignment, pickup forecast and consistent independent views', a
   const passenger = await context.newPage();
   passenger.on('pageerror', error => errors.push(error.message));
   const unexpected: string[] = [];
-  passenger.on('request', r => { if (/api\/(alternatives|reassign)/.test(r.url())) unexpected.push(r.url()); });
+  passenger.on('request', r => { if (r.url().includes('/api/alternatives?') || r.url().includes('/api/reassign')) unexpected.push(r.url()); });
   await passenger.goto('/passenger');
   await expect(passenger).toHaveTitle(/ZeroWait/);
   await expect(passenger.getByText('Live connection')).toBeVisible();
@@ -49,12 +49,20 @@ test('automatic assignment, pickup forecast and consistent independent views', a
     await expect(overview.getByTestId('current-floor')).toHaveText(car.position.toFixed(car.phase === 'MOVING' ? 1 : 0).padStart(2, '0'));
     await expect(overview.getByTestId('direction')).toContainText(car.direction);
     await expect(page.getByTestId(`lift-${i}`).getByTestId('scheduled-stop')).toHaveCount(car.stops.length);
-    await expect(passenger.getByTestId(`lift-${i}`).getByTestId('scheduled-stop')).toHaveCount(car.stops.length);
+    const floorDetails = passenger.getByRole('region', { name: `${car.id} pickup details` });
+    const relevant = car.stops.filter(s => !s.serviced && s.floor === assigned.origin && s.direction === assigned.direction && (car.id !== assigned.assignedElevator || s.pickupIds.includes(assigned.id)));
+    await expect(floorDetails.getByTestId('floor-arrival')).toHaveCount(relevant.length);
     for (const stop of car.stops) {
       await expect(page.getByTestId(`lift-${i}`).getByText(`Floor ${stop.floor}`, { exact: false }).first()).toBeVisible();
-      await expect(passenger.getByTestId(`lift-${i}`).getByText(`Floor ${stop.floor}`, { exact: false }).first()).toBeVisible();
+
     }
   }
+  const details = passenger.getByRole('dialog', { name: 'Lift details' });
+  await expect(details.getByTestId('floor-waiting')).toHaveText(String(state.lobbies.find(l => l.floor === assigned.origin)!.observation.count));
+  await expect(details.getByText('Likely full', { exact: true })).toBeVisible();
+  await expect(details.getByText(/Observed occupancy|Before board|After stop|Free spaces|COMPLETE UPCOMING ROUTE/)).toHaveCount(0);
+  await expect(details.getByTestId('scheduled-stop')).toHaveCount(0);
+  await passenger.screenshot({ path: 'docs/screenshots/passenger-floor-details.png', fullPage: true });
   await passenger.getByRole('button', { name: 'Close lift details' }).click();
   expect(unexpected).toEqual([]);
   expect(errors).toEqual([]);

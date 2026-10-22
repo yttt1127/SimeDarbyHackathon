@@ -11,14 +11,13 @@ type Props = {
   error: string;
   command: (path: string, data: unknown) => Promise<boolean>;
   onDashboard: () => void;
-  renderDetails: (car: CarView, index: number) => React.ReactNode;
 };
 const policy = new CapacityAssignment();
 const floorNumber = (car: CarView) => car.position.toFixed(car.phase === 'MOVING' ? 1 : 0).padStart(2, '0');
 const directionLabel = (car: CarView) => car.direction === 'UP' ? '↑ UP' : car.direction === 'DOWN' ? '↓ DOWN' : '— IDLE';
 const neutral = { tone: 'neutral', label: 'Awaiting direction' };
 
-export function PassengerApp({ state, session, connected, busy, error, command, onDashboard, renderDetails }: Props) {
+export function PassengerApp({ state, session, connected, busy, error, command, onDashboard }: Props) {
   // Explicit demo source only. No inference from network or physical location.
   const [floor, setFloor] = useState<number | null>(Math.min(4, state.config.floors));
   const [pending, setPending] = useState(false);
@@ -118,6 +117,22 @@ export function PassengerApp({ state, session, connected, busy, error, command, 
 
     <dialog ref={callSheet} className="p-details-sheet p-call-sheet" aria-labelledby="p-call-title"><div className="p-sheet-inner"><header><div><p>LET’S GET YOU THERE</p><h2 id="p-call-title">Which direction are you going?</h2></div><button aria-label="Close direction sheet" onClick={() => callSheet.current?.close()}>×</button></header><p className="p-sheet-note">{floor === null ? 'Select your demo floor before calling a lift.' : `Demo Floor ${String(floor).padStart(2, '0')} · Your lift is assigned automatically.`}</p>{floor === null && floorPicker}{error && <p role="alert" className="p-feedback">{error}</p>}<div className="p-call-directions"><button disabled={locked || !!request || floor === null || floor === state.config.floors} onClick={() => void submit('UP')}><span>↑</span>Going Up</button><button disabled={locked || !!request || floor === null || floor === 1} onClick={() => void submit('DOWN')}><span>↓</span>Going Down</button></div><p role="status" className="p-sheet-note">{pending ? 'Requesting your lift…' : floor === 1 ? 'You’re at the lowest floor. Choose UP.' : floor === state.config.floors ? 'You’re at the top floor. Choose DOWN.' : 'Tap a direction to call. No extra steps.'}</p></div></dialog>
     <dialog ref={locationSheet} className="p-details-sheet" aria-labelledby="p-location-title"><div className="p-sheet-inner"><header><h2 id="p-location-title">Demo location</h2><button aria-label="Close demo location" onClick={() => locationSheet.current?.close()}>×</button></header><p className="p-sheet-note">This is a simulated floor for testing. Indoor positioning is not connected.</p>{floorPicker}<button className="p-primary p-location-done" onClick={() => locationSheet.current?.close()}>Done</button></div></dialog>
-    <dialog ref={details} className="p-details-sheet" aria-labelledby="p-details-title"><div className="p-sheet-inner"><header><div><p>THE FULL PICTURE</p><h2 id="p-details-title">Lift details</h2></div><button aria-label="Close lift details" onClick={() => details.current?.close()}>×</button></header><p className="p-sheet-note">All upcoming stops and capacity forecasts. Estimates may change as your building’s lifts move.</p>{state.cars.map((car, i) => <React.Fragment key={car.id}>{renderDetails(car, i)}</React.Fragment>)}</div></dialog>
+    <dialog ref={details} className="p-details-sheet" aria-labelledby="p-details-title"><div className="p-sheet-inner"><header><div><p>YOUR PICKUP FLOOR</p><h2 id="p-details-title">Lift details</h2></div><button aria-label="Close lift details" onClick={() => details.current?.close()}>×</button></header>
+      {origin === null ? <p className="p-sheet-note">Set your demo floor to see its lift details.</p> : <>
+        <p className="p-sheet-note">Floor {String(origin).padStart(2, '0')}{request ? ` · Going ${request.direction.toLowerCase()}` : ''}. Only arrivals at your pickup floor are shown.</p>
+        <div className="p-floor-waiting"><span>Observed waiting on this floor <small>Both directions · live lobby observation</small></span><strong data-testid="floor-waiting">{state.lobbies.find(lobby => lobby.floor === origin)?.observation.count ?? '—'}{(state.lobbies.find(lobby => lobby.floor === origin)?.observation.uncertainty ?? 0) > 0 && <small> ±{state.lobbies.find(lobby => lobby.floor === origin)?.observation.uncertainty}</small>}</strong></div>
+        {state.cars.map(car => {
+          const stops = car.stops.filter(stop => !stop.serviced && stop.floor === origin && (!request || stop.direction === request.direction) && (car.id !== request?.assignedElevator || stop.pickupIds.includes(request.id)));
+          return <section className="p-floor-lift" key={car.id} aria-label={`${car.id} pickup details`}><header><h3>{car.id}</h3>{car.id === request?.assignedElevator && <span>Assigned to you</span>}</header>
+            {stops.length ? stops.map(stop => {
+              const tone = stop.availability === 'Likely full' ? 'full' : stop.availability === 'Uncertain' || stop.spaces < 2 || car.observation.uncertainty > 0 ? 'limited' : 'comfortable';
+              const label = tone === 'full' ? 'Likely full' : tone === 'limited' ? 'Limited space' : 'Comfortable';
+              return <div className="p-floor-arrival" data-testid="floor-arrival" key={stop.key}><div><span>{car.id === request?.assignedElevator ? 'Your pickup' : 'Scheduled arrival'} · Floor {String(stop.floor).padStart(2, '0')}</span><b>{Number.isFinite(stop.eta) ? stop.eta <= 0 ? 'Arriving now' : `${Math.ceil(stop.eta)} seconds` : 'Replanning'}</b><small>{stop.direction === 'UP' ? '↑ Going up' : stop.direction === 'DOWN' ? '↓ Going down' : 'Standing by'}</small></div><span className={`p-capacity p-capacity-pill ${tone}`}><i />{label}</span></div>;
+            }) : <p className="p-sheet-note">{car.id === request?.assignedElevator ? request.status === 'onboard' ? 'Your pickup is complete.' : 'Replanning your pickup.' : 'No scheduled arrival for your floor' + (request ? ' in your direction.' : '.')}</p>}
+          </section>;
+        })}
+        <p className="p-sheet-note">Capacity colors describe predicted boarding space at this floor, not the number of people inside. Blue: Comfortable · Amber: Limited space · Red: Likely full. Estimates may change.</p>
+      </>}
+    </div></dialog>
   </div>;
 }

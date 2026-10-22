@@ -27,7 +27,7 @@ function App() {
   }, []);
   const navigate = (next: string) => { setView(next); history.pushState({}, '', next === 'passenger' ? '/passenger' : '/'); };
   const state = live.state;
-  if (view === 'passenger') return state ? <PassengerApp state={state} session={live.session} connected={live.connected} busy={busy} error={live.error} command={command} onDashboard={() => navigate('dashboard')} renderDetails={(car, index) => <LiftPanel key={car.id} car={car} index={index} state={state} />} /> : <div className="loading"><Mark /><h2>Connecting ZeroWait…</h2></div>;
+  if (view === 'passenger') return state ? <PassengerApp state={state} session={live.session} connected={live.connected} busy={busy} error={live.error} command={command} onDashboard={() => navigate('dashboard')} /> : <div className="loading"><Mark /><h2>Connecting ZeroWait…</h2></div>;
   return <div className="app-shell">
     <aside className="sidebar">
       <a href="/" onClick={e => { e.preventDefault(); navigate('dashboard'); }} className="brand"><Mark /><span>liftflow<span className="brand-dot">.</span></span></a>
