@@ -1,6 +1,34 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { Snapshot } from '../../packages/shared/types';
 
+test('capacity colors follow sensor observations and show uncertainty on desktop and mobile', async ({ page, request }) => {
+  const state = await (await request.get('/api/state')).json() as Snapshot;
+  state.requests = [];
+  state.config.boardingLimit = 16;
+  const frames: ((data: string) => void)[] = [];
+  await page.routeWebSocket('**/ws', socket => {
+    frames.push(data => socket.send(data));
+    socket.send(JSON.stringify(state));
+  });
+  await page.goto('/');
+  await expect(page.getByText('Live connection')).toBeVisible();
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const [count, tone, label] of [[9, 'available', 'Available'], [10, 'limited', 'Limited'], [14, 'limited', 'Limited'], [15, 'full', 'Nearly full'], [16, 'full', 'Full']] as const) {
+      state.cars[0].observation = { count, uncertainty: 0, timestamp: 0 };
+      state.cars[0].actualOccupancy = 0; // Deliberately different: never use private truth for passenger capacity.
+      frames.forEach(send => send(JSON.stringify(state)));
+      const lift = page.getByTestId('overview-Lift A');
+      await expect(lift).toHaveClass(new RegExp(`tone-${tone}`));
+      await expect(lift.getByTestId('capacity')).toHaveText(label);
+    }
+    state.cars[0].observation.uncertainty = 1;
+    frames.forEach(send => send(JSON.stringify(state)));
+    await expect(page.getByTestId('overview-Lift A').getByTestId('capacity')).toHaveText('Uncertain');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
 async function changeFloor(page: Page, floor: string) {
   await page.getByRole('button', { name: 'Change', exact: true }).click();
   await page.getByRole('dialog', { name: 'Demo location' }).getByLabel('Simulated floor').selectOption(floor);
@@ -34,12 +62,12 @@ test('automatic assignment, pickup forecast and consistent independent views', a
   const car = state.cars.find(c => c.id === assigned.assignedElevator)!;
   const pickup = car.stops.find(s => !s.serviced && s.pickupIds.includes(assigned.id))!;
   await expect(passenger.getByTestId('pickup-eta')).toHaveText(`ETA: ${Math.ceil(pickup.eta)} seconds`);
-  await expect(passenger.getByRole('region', { name: 'Your assignment' }).getByText('Capacity: Comfortable')).toBeVisible();
+  await expect(passenger.getByRole('region', { name: 'Your assignment' }).getByText('Capacity: Available')).toBeVisible();
   await passenger.screenshot({ path: 'docs/screenshots/passenger.png', fullPage: true });
   await page.getByText('Run the capacity demonstration', { exact: false }).click();
   await page.getByRole('button', { name: 'Add lobby surge & advance 2s' }).click();
   await expect(passenger.getByRole('heading', { name: 'Lift A is on its way' })).toBeVisible();
-  await expect(passenger.getByRole('region', { name: 'Your assignment' }).getByText('Capacity: Comfortable')).toBeVisible();
+  await expect(passenger.getByRole('region', { name: 'Your assignment' }).getByText('Capacity: Available')).toBeVisible();
   await expect(passenger.getByRole('button', { name: /Accept Lift/ })).toHaveCount(0);
   await passenger.screenshot({ path: 'docs/screenshots/passenger-capacity.png', fullPage: true });
   state = await (await request.get('/api/state')).json() as Snapshot;
@@ -61,7 +89,7 @@ test('automatic assignment, pickup forecast and consistent independent views', a
   }
   const details = passenger.getByRole('dialog', { name: 'Lift details' });
   await expect(details.getByTestId('floor-waiting')).toHaveText(String(state.lobbies.find(l => l.floor === assigned.origin)!.observation.count));
-  await expect(details.getByText('Comfortable', { exact: true }).first()).toBeVisible();
+  await expect(details.getByText('Available', { exact: true }).first()).toBeVisible();
   await expect(details.getByText(/Observed occupancy|Before board|After stop|Free spaces|COMPLETE UPCOMING ROUTE/)).toHaveCount(0);
   await expect(details.getByTestId('scheduled-stop')).toHaveCount(0);
   await passenger.screenshot({ path: 'docs/screenshots/passenger-floor-details.png', fullPage: true });
@@ -111,9 +139,9 @@ test('demo floor fallback, invalid directions and responsive informational lifts
   await page.getByRole('button', { name: 'Passenger app', exact: false }).click();
   await expect(page.getByText('zerowait.')).toBeVisible();
   await expect(page.getByRole('article')).toHaveCount(2);
-  await expect(page.getByTestId('capacity').filter({ hasText: 'Comfortable' })).toHaveCount(2);
+  await expect(page.getByTestId('capacity').filter({ hasText: 'Available' })).toHaveCount(2);
   await expect(page.getByTestId('main-waiting')).toHaveText('0 people');
-  await expect(page.getByTestId('overview-Lift A')).toHaveClass(/tone-comfortable/);
+  await expect(page.getByTestId('overview-Lift A')).toHaveClass(/tone-available/);
   await expect(page.getByTestId('upcoming-stops').filter({ hasText: 'No scheduled stops' })).toHaveCount(2);
   await expect(page).toHaveURL(/\/$/);
   await page.screenshot({ path: 'docs/screenshots/passenger-redesign.png', fullPage: true });

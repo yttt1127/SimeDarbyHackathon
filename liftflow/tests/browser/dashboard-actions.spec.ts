@@ -6,6 +6,8 @@ import { resolveRuntimeConfig } from '../../apps/server/runtime';
 async function dashboard(page: Page) {
   await page.goto('/dashboard');
   await expect(page.getByText('Live connection')).toBeVisible();
+  await expect(page.getByText(/MODEL SETTINGS|The live log|BUILDING ACTIVITY/)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Apply settings & reset' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Reset simulation' }).click();
 }
 async function addTwo(page: Page) {

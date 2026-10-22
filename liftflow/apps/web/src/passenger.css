@@ -53,7 +53,7 @@
 .p-option-name>span{font-size:8px;color:#8b6c59;background:#f5eae1;border-radius:4px;padding:3px 4px}
 .p-capacity{font-size:10px;display:flex;gap:5px;align-items:center}
 .p-capacity i{height:5px;width:5px;border-radius:50%;background:currentColor;flex-shrink:0}
-.p-capacity.comfortable{color:#2364b2}
+.p-capacity.available{color:#2364b2}
 .p-capacity.limited{color:#b15a13}
 .p-capacity.full{color:#be3541}
 .p-option-eta{text-align:right;flex-shrink:0}
@@ -101,7 +101,7 @@
 .p-shaft{text-align:center;padding:12px 9px 15px}
 .p-shaft.assigned{border-color:#ff9959;background:#ffffff08}
 .p-shaft .p-capacity{justify-content:center;margin-top:13px;font-size:10px}
-.p-hero .p-capacity.comfortable{color:#91beff}
+.p-hero .p-capacity.available{color:#91beff}
 .p-hero .p-capacity.limited{color:#ffc172}
 .p-hero .p-capacity.full{color:#ff9aab}
 .p-capacity.neutral{color:#727a83}
@@ -136,12 +136,12 @@
 .p-floor-lift{padding:18px;background:#fff;border:1px solid #e4e7eb;border-radius:20px;margin:12px 0}
 .p-floor-lift header{display:flex;align-items:center;justify-content:space-between;gap:12px}.p-floor-lift h3{font-size:17px}.p-floor-lift header>span{font-size:10px;color:#92502e;background:#fff0e7;padding:6px 9px;border-radius:10px}
 .p-floor-arrival{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #eff0f2;margin-top:15px;padding-top:15px}.p-floor-arrival>div{display:grid;gap:7px}.p-floor-arrival>div>span,.p-floor-arrival small{font-size:11px;color:#737a83}.p-floor-arrival b{font-size:19px;font-weight:550}
-.p-capacity-pill{padding:9px 11px;border-radius:20px;white-space:nowrap;font-size:11px}.p-capacity-pill.comfortable{background:#eaf2ff;color:#205ca5}.p-capacity-pill.limited{background:#fff0d9;color:#975016}.p-capacity-pill.full{background:#ffe9ee;color:#ac283b}
+.p-capacity-pill{padding:9px 11px;border-radius:20px;white-space:nowrap;font-size:11px}.p-capacity-pill.available{background:#eaf2ff;color:#205ca5}.p-capacity-pill.limited{background:#fff0d9;color:#975016}.p-capacity-pill.full{background:#ffe9ee;color:#ac283b}
 @media(max-width:360px){.p-floor-arrival{align-items:flex-start;flex-direction:column}}
 .p-floor-arrival .p-capacity-pill{width:auto;flex-shrink:0}
 /* V0.2: legible capacity-colored lifts and complete compact routes. */
 .p-shaft{--lift-color:#8c959e;border:1.5px solid var(--lift-color);border-radius:15px;padding:14px 8px}
-.p-shaft.tone-comfortable{--lift-color:#4b9bff}.p-shaft.tone-limited{--lift-color:#ef9a32}.p-shaft.tone-full{--lift-color:#ef6d85}
+.p-shaft.tone-available{--lift-color:#4b9bff}.p-shaft.tone-limited{--lift-color:#ef9a32}.p-shaft.tone-full{--lift-color:#ef6d85}
 .p-shaft.assigned{border-color:var(--lift-color);box-shadow:0 0 0 2px #ffffff35}
 .p-shaft .p-door-frame{border-color:var(--lift-color);background:var(--lift-color);width:64px;height:73px;padding:7px 5px 0;border-width:3px;border-bottom:3px solid var(--lift-color);border-radius:6px;box-shadow:none}
 .p-shaft .p-door-display,.p-shaft .p-call-light{display:none}
@@ -151,3 +151,5 @@
 .p-main-waiting{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;padding:17px 0;border-bottom:1px solid #eff0f2;font-size:12px;color:#656f79}.p-main-waiting strong{color:#24292e;font-weight:550}.p-main-waiting small{width:100%;font-size:9px;color:#89919a}
 
 .p-shaft .p-car-label small{display:none}.p-shaft .p-door-frame{height:60px;margin-top:10px;margin-bottom:8px}.p-shaft .p-upcoming{margin-top:9px}.p-shaft{padding:10px 8px}.p-shaft .p-movement{margin-top:9px}
+
+.p-capacity.neutral{color:#6b7280}.p-hero .p-capacity.neutral{color:#c6cbd3}.p-capacity-pill.neutral{background:#eef0f3;color:#525b67}.p-shaft.tone-neutral{--lift-color:#a0a8b4}

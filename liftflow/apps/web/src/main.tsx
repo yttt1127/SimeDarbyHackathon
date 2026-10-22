@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { CarView, Config, Snapshot } from '../../../packages/shared/types';
+import type { CarView, Snapshot } from '../../../packages/shared/types';
 import { useLive } from './live';
 import './style.css';
 import { PassengerApp } from './PassengerApp';
@@ -61,10 +61,9 @@ function App() {
               </div>
               <div className="section-heading"><div><h2>Every stop. The full picture.</h2><p>Live route plans with arrival estimates and capacity forecasts.</p></div><span className="subtle-badge">OBSERVED + PREDICTED</span></div>
               <div className="lift-grid">{state.cars.map((car, i) => <LiftPanel key={car.id} car={car} index={i} state={state} />)}</div>
-              <div className="bottom-grid"><Activity state={state} /><section className="panel"><PanelTitle eyebrow="MODEL SETTINGS" title="Built to be explored" /><Settings config={state.config} command={command} /></section></div>
             </> : null}
           </fieldset>}
-        <footer><span>Liftflow <b>V0.2</b> · A functional simulation, one floor at a time.</span><span>Headcounts estimate comfort, not weight or certified load capacity.</span></footer>
+        <footer><span>Liftflow <b>V0.2</b> · A functional simulation, one floor at a time.</span><span>Passenger-count prototype, not a certified physical load rating.</span></footer>
       </main>
     </div>
     {addOpen && state && <AddPassenger floors={state.config.floors} error={live.error} connected={live.connected} command={command} close={() => setAddOpen(false)} />}
@@ -77,7 +76,7 @@ function Stats({ state }: { state: Snapshot }) {
   const waiting = state.requests.filter(r => r.status === 'waiting').length;
   const riding = state.cars.reduce((sum, c) => sum + c.actualOccupancy, 0);
   const completed = state.requests.filter(r => r.status === 'completed').length;
-  const congested = state.lobbies.filter(l => l.actual > state.config.comfort).length;
+  const congested = state.lobbies.filter(l => l.actual > state.config.boardingLimit).length;
   return <div className="stats">
     {[['↕', 'Elevators online', state.cars.length.toString().padStart(2, '0'), `${state.cars.filter(c => c.phase !== 'IDLE').length} serving passengers`],
       ['◷', 'Waiting to ride', waiting.toString().padStart(2, '0'), congested ? `${congested} congested ${congested === 1 ? 'floor' : 'floors'}` : 'Across all floors'],
@@ -90,7 +89,7 @@ function Building({ state }: { state: Snapshot }) {
   return <div className="building" style={{ '--cars': state.cars.length } as React.CSSProperties}>
     <div className="building-labels"><span>FLOOR</span><span>LIFT SHAFTS</span><span>WAITING</span></div>
     <div className="building-body">
-      <div className="floor-grid">{[...state.lobbies].reverse().map(lobby => <div className={`floor-row ${lobby.actual > state.config.comfort ? 'congested' : ''}`} key={lobby.floor}><span className="floor-label">{lobby.floor.toString().padStart(2, '0')}<small>{lobby.floor === 1 ? 'LOBBY' : ''}</small></span><div className="floor-line" /><span className="waiting-count" title={`Actual queue: ${lobby.actual}; observed: ${lobby.observation.count} ± ${lobby.observation.uncertainty}`}>{lobby.actual ? <><i />{lobby.actual}</> : <span className="empty-queue">—</span>}</span></div>)}</div>
+      <div className="floor-grid">{[...state.lobbies].reverse().map(lobby => <div className={`floor-row ${lobby.actual > state.config.boardingLimit ? 'congested' : ''}`} key={lobby.floor}><span className="floor-label">{lobby.floor.toString().padStart(2, '0')}<small>{lobby.floor === 1 ? 'LOBBY' : ''}</small></span><div className="floor-line" /><span className="waiting-count" title={`Actual queue: ${lobby.actual}; observed: ${lobby.observation.count} ± ${lobby.observation.uncertainty}`}>{lobby.actual ? <><i />{lobby.actual}</> : <span className="empty-queue">—</span>}</span></div>)}</div>
       <div className="shafts">{state.cars.map((car, i) => <div className="shaft" key={car.id}><div className={`elevator-car car-${i % 2} ${['OPENING', 'BOARDING'].includes(car.phase) ? 'doors-open' : ''}`} style={{ bottom: `calc(${(car.position - 1) / state.config.floors * 100}% + ${(100 / state.config.floors) / 2}% - 19px)` }} aria-label={`${car.id} at floor ${car.position.toFixed(1)}, ${car.phase}`}><span>{String.fromCharCode(65 + i)}</span><b>{arrow(car.direction)}</b><i /><i /></div></div>)}</div>
     </div>
     <div className="building-ground"><span>GROUND LEVEL</span><span>POSITION · SIMULATOR TRUTH</span></div>
@@ -114,8 +113,8 @@ function LiftPanel({ car, index, state }: { car: CarView; index: number; state: 
   return <section className={`panel lift-panel lift-${index % 2}`} data-testid={`lift-${index}`}>
     <div className="lift-header"><div className="lift-identity"><div className="lift-letter">{String.fromCharCode(65 + index)}</div><div><h2>{car.id}</h2><span>{car.phase === 'IDLE' ? 'Standing by' : car.phase === 'MOVING' ? `Moving ${car.direction.toLowerCase()}` : `${car.phase.toLowerCase()} · floor ${Math.round(car.position)}`}</span></div></div><div className="current-floor"><small>CURRENT FLOOR</small><strong>{car.position.toFixed(car.phase === 'MOVING' ? 1 : 0)} <span>{arrow(car.direction)}</span></strong></div></div>
     <div className="occupancy-line"><span>Observed occupancy <b>{car.observation.count}</b><span className="muted"> ± {car.observation.uncertainty} people</span></span><span className="actual-label">Actual: {car.actualOccupancy}</span></div>
-    <div className="capacity-meter"><span style={{ width: `${Math.min(100, car.observation.count / state.config.comfort * 100)}%` }} /></div>
-    <div className="capacity-caption"><span>Comfort threshold: {state.config.comfort} people</span><span>Observed at {clock(car.observation.timestamp)}</span></div>
+    <div className="capacity-meter"><span style={{ width: `${Math.min(100, car.observation.count / state.config.boardingLimit * 100)}%` }} /></div>
+    <div className="capacity-caption"><span>Simulated capacity: {state.config.boardingLimit} people</span><span>Observed at {clock(car.observation.timestamp)}</span></div>
     <div className="route-title"><span>COMPLETE UPCOMING ROUTE</span><b>{car.stops.length} {car.stops.length === 1 ? 'stop' : 'stops'}</b></div>
     {car.stops.length === 0 ? <div className="empty-route"><span>↕</span><strong>Ready for the next journey</strong><p>No scheduled stops. Add a passenger or request a lift.</p></div> :
       <div className="stop-list">{car.stops.map((stop, i) => <div className={`stop-item ${stop.availability === 'Likely full' ? 'full-stop' : ''}`} key={stop.key} data-testid="scheduled-stop">
@@ -127,28 +126,6 @@ function LiftPanel({ car, index, state }: { car: CarView; index: number; state: 
       </div>)}</div>}
     <div className="prediction-note">Forecasts use observed counts and known calls. Waiting destinations are unknown; predicted boarders remain in later estimates.</div>
   </section>;
-}
-function Activity({ state }: { state: Snapshot }) {
-  const significant = state.events;
-  return <section className="panel activity"><PanelTitle eyebrow="BUILDING ACTIVITY" title="The live log" extra={<a className="text-link" href="/api/events" target="_blank" rel="noreferrer">All events ↗</a>} /><div className="event-list">{significant.map(event => <div className="event" key={event.sequence}><span className={`event-icon event-${event.type}`}>{event.type === 'boarding' ? '↑' : event.type === 'exit' ? '✓' : event.type === 'reassignment' ? '⇄' : '·'}</span><div><span>{event.message}</span><small>{event.type.replace('-', ' ')}</small></div><time>{clock(event.at)}</time></div>)}</div><div className="event-footer">Timestamped simulator events · full history available as JSON</div></section>;
-}
-function Settings({ config, command }: { config: Config; command: Command }) {
-  const [draft, setDraft] = useState(config);
-  useEffect(() => setDraft(config), [JSON.stringify(config)]);
-  return <form className="settings" onSubmit={e => { e.preventDefault(); void command('config', draft); }}>
-    <p>Illustrative assumptions for this virtual building. Applying settings starts a fresh simulation.</p>
-    <div className="settings-grid">{([
-      ['floors', 'Floors', 2, 40, 1], ['elevators', 'Elevators', 1, 6, 1], ['comfort', 'Comfort threshold', 1, 50, 1],
-      ['boardingLimit', 'Simulated boarding limit', 1, 50, 1], ['travelSeconds', 'Seconds per floor', 0.5, 30, 0.5],
-      ['stopSeconds', 'Seconds per stop', 1, 60, 1], ['sensorError', 'Sensor uncertainty ±', 0, 5, 1],
-      ['morningLobbyShare', 'Morning down-peak share', 0, 1, 0.05],
-      ['eveningLobbyShare', 'Evening up-peak share', 0, 1, 0.05],
-      ['offPeakLobbyShare', 'Off-peak lobby share', 0, 1, 0.05],
-      ['seed', 'Traffic seed', 0, 2147483647, 1], ['riskWeight', 'Risk penalty (seconds)', 0, 300, 1],
-      ['delayWeight', 'Added delay coefficient', 0, 10, 0.05],
-    ] as const).map(([key, label, min, max, step]) => <label key={key}>{label}<input type="number" min={min} max={max} step={step} required value={draft[key]} onChange={e => setDraft({ ...draft, [key]: Number(e.target.value) })} /></label>)}</div>
-    <button className="secondary full" type="submit">Apply settings &amp; reset</button>
-  </form>;
 }
 function AddPassenger({ floors, command, close, error, connected }: { floors: number; command: Command; close: () => void; error: string; connected: boolean }) {
   const [origin, setOrigin] = useState(1), [destination, setDestination] = useState(floors), [count, setCount] = useState(1);

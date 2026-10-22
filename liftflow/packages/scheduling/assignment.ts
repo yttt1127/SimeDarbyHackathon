@@ -15,7 +15,7 @@ export class CapacityAssignment implements AssignmentPolicy {
       const pickup = route.find(s => s.pickupIds.includes(request.id))!;
       const rank = pickup.pickupIds.indexOf(request.id) + 1;
       // Prefer an existing compatible hall visit only if the extra passenger fits.
-      // Keep comfort scoring separate from the simulator's hard boarding limit.
+      // Both grouping and risk use remaining hard boarding capacity.
       if (existing.some(r => r.origin === request.origin && r.direction === request.direction && r.assignedElevator === car.id && !r.deferred) &&
           pickup.boardingSpaces - car.observation.uncertainty >= rank && !pickup.serviced) grouped.add(car.id);
       const risk = Math.min(1, Math.max(0, (rank - pickup.spaces + car.observation.uncertainty) / Math.max(1, rank)));

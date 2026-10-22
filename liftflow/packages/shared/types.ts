@@ -2,12 +2,14 @@ export type Direction = 'UP' | 'DOWN' | 'IDLE';
 export type Phase = 'IDLE' | 'MOVING' | 'OPENING' | 'BOARDING' | 'CLOSING';
 export type PassengerStatus = 'waiting' | 'boarding' | 'riding' | 'exiting' | 'completed' | 'cancelled';
 export interface Config {
-  floors: number; elevators: number; comfort: number; boardingLimit: number;
+  floors: number; elevators: number; boardingLimit: number;
+  /** @deprecated Accepted for legacy configuration only; ignored by capacity calculations. */
+  comfort: number;
   travelSeconds: number; stopSeconds: number; riskWeight: number; delayWeight: number;
   sensorError: number; seed: number;
   morningLobbyShare: number; eveningLobbyShare: number; offPeakLobbyShare: number;
 }
-export const defaults: Config = { floors: 10, elevators: 2, comfort: 10, boardingLimit: 10,
+export const defaults: Config = { floors: 10, elevators: 2, comfort: 10, boardingLimit: 16,
   travelSeconds: 4, stopSeconds: 8, riskWeight: 30, delayWeight: 0.25, sensorError: 0, seed: 42, morningLobbyShare: 0.75, eveningLobbyShare: 0.75, offPeakLobbyShare: 0.65 };
 export interface Passenger { id: string; requestId: string; destination: number; status: PassengerStatus; elevatorId?: string }
 export interface Request {

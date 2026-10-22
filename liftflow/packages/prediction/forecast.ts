@@ -12,7 +12,7 @@ export function forecast(car: KnownCar, route: Stop[], knowledge: Knowledge): Fo
     const arriving = occupancy;
     const exits = stop.serviced ? 0 : Math.min(occupancy, stop.dropoffIds.length);
     const beforeBoarding = Math.max(0, occupancy - exits);
-    const spaces = Math.max(0, config.comfort - beforeBoarding);
+    const spaces = Math.max(0, config.boardingLimit - beforeBoarding);
     const boardingSpaces = Math.max(0, config.boardingLimit - beforeBoarding);
     const waiting = stop.pickupIds.filter(id => requests.some(r => r.id === id)).length;
     const boarding = stop.serviced ? 0 : Math.min(waiting, boardingSpaces);

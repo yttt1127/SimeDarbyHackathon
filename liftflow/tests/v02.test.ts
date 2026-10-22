@@ -96,7 +96,7 @@ describe('V0.2 coordinated residential service', () => {
     const sim = new Simulation({ elevators: 1, comfort: 1, boardingLimit: 3 });
     for (let i = 0; i < 3; i++) sim.addPassenger('r', 1, 8);
     const stop = sim.snapshot().cars[0].stops[0];
-    expect(stop.spaces).toBe(1); expect(stop.boardingSpaces).toBe(3); expect(stop.boarding).toBe(3);
+    expect(stop.spaces).toBe(3); expect(stop.boardingSpaces).toBe(3); expect(stop.boarding).toBe(3);
     sim.advance(2);
     const dropoff = sim.snapshot().cars[0].stops.find(s => s.floor === 8)!;
     expect(dropoff.beforeBoarding).toBe(0); expect(dropoff.exits).toBe(3);

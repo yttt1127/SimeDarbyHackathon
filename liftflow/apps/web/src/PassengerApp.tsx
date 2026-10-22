@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { CarView, Snapshot } from '../../../packages/shared/types';
 import './passenger.css';
+import { capacityStatus, pickupCapacityStatus } from './capacity-status';
 import { floorLabel as floorNumber } from './passenger-format';
 
 type Props = {
@@ -13,12 +14,6 @@ type Props = {
   onDashboard: () => void;
 };
 const directionLabel = (car: CarView) => car.direction === 'UP' ? '↑ UP' : car.direction === 'DOWN' ? '↓ DOWN' : '— IDLE';
-const currentOutlook = (car: CarView, state: Snapshot) => {
-  if (!Number.isFinite(car.observation.count)) return { tone: 'neutral', label: 'Unknown' };
-  const lower = car.observation.count - car.observation.uncertainty;
-  const upper = car.observation.count + car.observation.uncertainty;
-  return lower >= state.config.boardingLimit ? { tone: 'full', label: 'Likely full' } : upper >= state.config.comfort || car.observation.uncertainty > 0 ? { tone: 'limited', label: 'Limited space' } : { tone: 'comfortable', label: 'Comfortable' };
-};
 
 export function PassengerApp({ state, session, connected, busy, error, command, onDashboard }: Props) {
   // Explicit demo source only. No inference from network or physical location.
@@ -53,13 +48,11 @@ export function PassengerApp({ state, session, connected, busy, error, command, 
   }, [request?.id]);
 
   // Only the assigned pickup has an authoritative future boarding forecast.
-  // Other cars show current observed comfort, clearly labelled as such.
+  // Other cars show current observed capacity, clearly labelled as such.
   const outlook = (car: CarView) => {
-    if (request?.status !== 'waiting' || car.id !== request.assignedElevator) return currentOutlook(car, state);
+    if (request?.status !== 'waiting' || car.id !== request.assignedElevator) return capacityStatus(car.observation.count, state.config.boardingLimit, car.observation.uncertainty);
     if (!pickup) return { tone: 'neutral', label: 'Replanning' };
-    const full = pickup.availability === 'Likely full';
-    const limited = pickup.availability === 'Uncertain' || pickup.spaces < 2 || car.observation.uncertainty > 0;
-    return { tone: full ? 'full' : limited ? 'limited' : 'comfortable', label: full ? 'Likely full' : limited ? 'Limited space' : 'Comfortable' };
+    return pickupCapacityStatus(pickup, state.config.boardingLimit, car.observation.uncertainty, request.id);
   };
   const submit = async (direction: 'UP' | 'DOWN') => {
     if (submitting.current || locked || request || floor === null || floor < 1 || floor > state.config.floors || (direction === 'UP' ? floor === state.config.floors : floor === 1)) return;
@@ -90,11 +83,11 @@ export function PassengerApp({ state, session, connected, busy, error, command, 
             <div aria-hidden="true" className={`p-door-frame ${car.phase === 'OPENING' || car.phase === 'BOARDING' ? 'open' : ''}`}><div className="p-door-display">{car.direction === 'UP' ? '↑' : car.direction === 'DOWN' ? '↓' : '•'} {floorNumber(car)}</div><div className="p-door-opening"><i /><i /></div><span className="p-call-light" /></div>
             <span className="p-movement" data-testid="direction">{directionLabel(car)}</span>
             <span className={`p-capacity ${info.tone}`} data-testid="capacity"><i />{info.label}</span>
-            <small className="p-status-context">{request?.status === 'waiting' && request.assignedElevator === car.id ? 'At your pickup · estimate' : 'Current comfort · estimate'}</small>
+            <small className="p-status-context">{request?.status === 'waiting' && request.assignedElevator === car.id ? 'At your pickup · estimate' : 'Current capacity · estimate'}</small>
             <div className="p-upcoming"><small>Upcoming</small><p data-testid="upcoming-stops">{car.stops.filter(stop => !stop.serviced).map(stop => String(stop.floor).padStart(2, '0')).join(' → ') || 'No scheduled stops'}</p></div>
           </article>;
         })}</div>
-        <div className="p-hero-footer">{request?.status === 'waiting' ? 'Assigned lift: pickup estimate · other lifts: current comfort' : 'Current comfort estimates · not a pickup forecast'}</div>
+        <div className="p-hero-footer">{request?.status === 'waiting' ? 'Assigned lift: pickup estimate · other lifts: current capacity' : 'Current capacity estimates · not a pickup forecast'}</div>
       </section>
 
       <div className="p-main-waiting"><span>Waiting at your floor</span><strong data-testid="main-waiting">{origin === null ? 'Select a floor' : `${state.lobbies.find(l => l.floor === origin)?.observation.count ?? '—'} people`}</strong><small>Observed · both directions</small></div>
@@ -115,16 +108,17 @@ export function PassengerApp({ state, session, connected, busy, error, command, 
     <dialog ref={callSheet} className="p-details-sheet p-call-sheet" aria-labelledby="p-call-title"><div className="p-sheet-inner"><header><div><p>LET’S GET YOU THERE</p><h2 id="p-call-title">Which direction are you going?</h2></div><button aria-label="Close direction sheet" onClick={() => callSheet.current?.close()}>×</button></header><p className="p-sheet-note">{floor === null ? 'Select your demo floor before calling a lift.' : `Demo Floor ${String(floor).padStart(2, '0')} · Your lift is assigned automatically.`}</p>{floor === null && floorPicker}{error && <p role="alert" className="p-feedback">{error}</p>}<div className="p-call-directions"><button disabled={locked || !!request || floor === null || floor === state.config.floors} onClick={() => void submit('UP')}><span>↑</span>Going Up</button><button disabled={locked || !!request || floor === null || floor === 1} onClick={() => void submit('DOWN')}><span>↓</span>Going Down</button></div><p role="status" className="p-sheet-note">{pending ? 'Requesting your lift…' : floor === 1 ? 'You’re at the lowest floor. Choose UP.' : floor === state.config.floors ? 'You’re at the top floor. Choose DOWN.' : 'Tap a direction to call. No extra steps.'}</p></div></dialog>
     <dialog ref={locationSheet} className="p-details-sheet" aria-labelledby="p-location-title"><div className="p-sheet-inner"><header><h2 id="p-location-title">Demo location</h2><button aria-label="Close demo location" onClick={() => locationSheet.current?.close()}>×</button></header><p className="p-sheet-note">This is a simulated floor for testing. Indoor positioning is not connected.</p>{floorPicker}<button className="p-primary p-location-done" onClick={() => locationSheet.current?.close()}>Done</button></div></dialog>
     <dialog ref={details} className="p-details-sheet" aria-labelledby="p-details-title"><div className="p-sheet-inner"><header><div><p>YOUR BUILDING’S LIFTS</p><h2 id="p-details-title">Lift details</h2></div><button aria-label="Close lift details" onClick={() => details.current?.close()}>×</button></header>
-      <p className="p-sheet-note">Upcoming stops in travel order. Times and boarding comfort are estimates.</p>
+      <p className="p-sheet-note">Upcoming stops in travel order. Times and boarding availability are estimates.</p>
       {origin !== null && <div className="p-floor-waiting"><span>Waiting at Floor {String(origin).padStart(2, '0')}<small>Observed · both directions</small></span><strong data-testid="floor-waiting">{state.lobbies.find(l => l.floor === origin)?.observation.count ?? '—'}</strong></div>}
       {state.cars.map(car => <section className="p-floor-lift" key={car.id} aria-label={`${car.id} route details`}><header><h3>{car.id}</h3>{car.id === request?.assignedElevator && <span>Assigned to you</span>}</header><p className="p-sheet-note">Current Floor {floorNumber(car)}F · {directionLabel(car)}</p>
         {car.stops.filter(stop => !stop.serviced).map(stop => {
-          const tone = stop.availability === 'Likely full' ? 'full' : stop.availability === 'Uncertain' || stop.spaces < 2 ? 'limited' : 'comfortable';
-          return <div className="p-floor-arrival" data-testid="floor-arrival" key={stop.key}><div><span>{stop.pickupIds.includes(request?.id ?? '') ? 'Your pickup · ' : ''}Floor {String(stop.floor).padStart(2, '0')} · {stop.direction}</span><b>{Number.isFinite(stop.eta) ? stop.eta <= 0 ? 'Arriving now' : `${Math.ceil(stop.eta)} seconds` : 'Calculating'}</b></div><span className={`p-capacity p-capacity-pill ${tone}`}><i />{tone === 'full' ? 'Likely full' : tone === 'limited' ? 'Limited space' : 'Comfortable'}</span></div>;
+          const info = pickupCapacityStatus(stop, state.config.boardingLimit, car.observation.uncertainty, request?.id);
+          const tone = info.tone;
+          return <div className="p-floor-arrival" data-testid="floor-arrival" key={stop.key}><div><span>{stop.pickupIds.includes(request?.id ?? '') ? 'Your pickup · ' : ''}Floor {String(stop.floor).padStart(2, '0')} · {stop.direction}</span><b>{Number.isFinite(stop.eta) ? stop.eta <= 0 ? 'Arriving now' : `${Math.ceil(stop.eta)} seconds` : 'Calculating'}</b></div><span className={`p-capacity p-capacity-pill ${tone}`}><i />{info.label}</span></div>;
         })}
         {!car.stops.some(stop => !stop.serviced) && <p className="p-sheet-note">No scheduled stops</p>}
       </section>)}
-      <p className="p-sheet-note">Colors indicate estimated comfort, not certified safety capacity.</p>
+      <p className="p-sheet-note">Colors indicate estimated capacity, not certified safety capacity.</p>
     </div></dialog>
   </div>;
 }
