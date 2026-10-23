@@ -2,6 +2,8 @@
 
 A live elevator traffic prototype: React dashboard and ZeroWait mobile passenger app, backed by one authoritative discrete-event simulator. It can run locally or as a public demonstration service. No physical controls or comparative benchmarks are included.
 
+For a short walkthrough, see the [Simulator demo guide](DEMO.md).
+
 ## Share the passenger app
 
 Use https://hackathon-1-xfrp.onrender.com/ for public sharing and QR codes. The root opens the passenger app on mobile and desktop. `/passenger` is an alias; `/dashboard` intentionally opens the simulator. Update old simulator bookmarks or QR targets to the root URL. The top **Passenger App | Simulator** switch preserves the shared simulation and current request.
