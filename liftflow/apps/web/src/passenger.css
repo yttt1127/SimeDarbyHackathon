@@ -153,3 +153,4 @@
 .p-shaft .p-car-label small{display:none}.p-shaft .p-door-frame{height:60px;margin-top:10px;margin-bottom:8px}.p-shaft .p-upcoming{margin-top:9px}.p-shaft{padding:10px 8px}.p-shaft .p-movement{margin-top:9px}
 
 .p-capacity.neutral{color:#6b7280}.p-hero .p-capacity.neutral{color:#c6cbd3}.p-capacity-pill.neutral{background:#eef0f3;color:#525b67}.p-shaft.tone-neutral{--lift-color:#a0a8b4}
+@media(max-width:380px){.passenger-shell.has-request .p-bottom-action{margin-left:-18px;margin-right:-18px}}

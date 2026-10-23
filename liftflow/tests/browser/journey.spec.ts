@@ -111,6 +111,7 @@ test('manual creation, own cancellation, step, pause and mobile layout', async (
   await dialog.getByRole('button', { name: 'Add 2 passengers' }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByText('Pickup 2', { exact: false })).toBeVisible();
+  await page.getByText('Advanced', { exact: true }).click();
   await page.getByRole('button', { name: '+1s Step', exact: true }).click();
   await expect(page.getByTestId('sim-clock')).toHaveText('00:01.0');
   await page.getByRole('button', { name: 'Start / resume', exact: false }).click();
@@ -125,7 +126,7 @@ test('manual creation, own cancellation, step, pause and mobile layout', async (
   await page.getByRole('button', { name: 'Cancel my request' }).click();
   await expect(page.getByRole('heading', { name: 'Request cancelled', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.getByRole('button', { name: 'Building overview', exact: false }).click();
+  await page.getByRole('button', { name: 'Simulator', exact: false }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 

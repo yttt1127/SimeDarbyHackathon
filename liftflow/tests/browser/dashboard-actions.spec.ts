@@ -30,7 +30,7 @@ test('manual creation is immediate while paused, including after reset', async (
     expect(state.now).toBe(0);
     expect(state.requests.filter(r => r.status === 'waiting')).toHaveLength(2);
     expect(state.cars.flatMap(c => c.stops).flatMap(s => s.pickupIds)).toHaveLength(2);
-    await expect(page.locator('.stat').filter({ hasText: 'Waiting to ride' }).locator('strong')).toHaveText('02');
+    await expect(page.locator('.stat').filter({ hasText: 'Passengers waiting' }).locator('strong')).toHaveText('02');
     await expect(page.getByText('Pickup 2', { exact: false })).toBeVisible();
     await page.getByRole('button', { name: 'Reset simulation' }).click();
     await expect(page.getByTestId('pending-arrivals')).toHaveText('0');

@@ -10,3 +10,16 @@
 .operator-login{padding:0 23px 23px}.operator-login p{font-size:11px;line-height:1.6;color:#78877b;margin-bottom:16px}.operator-login label{display:block;font-size:11px;color:#617363;margin-bottom:15px}.operator-login input{display:block;width:100%;margin-top:7px}
 
 .traffic-status{font-size:12px;line-height:1.7;margin:10px 0 14px;color:#50675c}.traffic-status small{font-size:10px;color:#6c7f74}
+/* Shared mobile-first navigation and compact simulator layout. */
+.view-navigation{display:flex;gap:4px;padding:4px;background:#f0f2f1;border:1px solid #e2e6e3;border-radius:14px;width:min(100%,360px);margin-bottom:22px}
+.view-navigation button{flex:1;min-height:44px;padding:10px 14px;border:0;border-radius:10px;background:transparent;color:#59645f;font-size:14px;font-weight:600}
+.view-navigation button[aria-current=page]{background:#fff;color:#182c24;box-shadow:0 1px 4px #15271c15}
+.view-navigation button:first-child[aria-current=page]{color:#b74716}
+.view-navigation button:focus-visible{outline:2px solid #ee713b;outline-offset:2px}
+.passenger-shell>.view-navigation{margin:12px 24px 20px;width:calc(100% - 48px)}
+.app-shell .main-shell{margin:0;width:100%}.app-shell main{max-width:1320px;margin:auto}
+.app-shell .page-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}.app-shell .page-heading h1{font-size:28px;letter-spacing:-.7px}
+.app-shell .stats{grid-template-columns:repeat(3,minmax(0,1fr))}.app-shell .empty-route{padding:22px 12px;min-height:0}
+.advanced-controls{margin:12px 0}.advanced-controls summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-size:13px}.advanced-controls summary::before{content:'▸';margin-right:8px}.advanced-controls[open] summary::before{content:'▾'}
+.app-shell button,.app-shell select{min-height:44px}.app-shell .topbar{height:60px}.app-shell .section-heading{margin:24px 0 14px}
+@media(max-width:660px){.app-shell .stats{grid-template-columns:1fr}.app-shell .stat{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:14px 18px}.app-shell .stat>strong{grid-column:2;grid-row:1/3;align-self:center}.app-shell .stat-icon{display:none}.app-shell .stat-top{font-size:13px}.app-shell .stat-note{font-size:11px}.app-shell .view-navigation{width:100%}.app-shell .prediction-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.app-shell .prediction-grid span{font-size:10px}.app-shell .capacity-caption{flex-wrap:wrap;gap:6px}.app-shell .topbar{font-size:13px}.app-shell .control-buttons{flex-wrap:wrap}.app-shell .scenario-select{min-width:0}.app-shell .scenario-select select{min-width:0}.app-shell .occupancy-line{flex-wrap:wrap;gap:6px}.app-shell .stop-main{gap:8px}}

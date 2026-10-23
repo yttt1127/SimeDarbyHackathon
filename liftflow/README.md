@@ -1,6 +1,10 @@
-# ZeroWait · V0.2
+# ZeroWait · V0.2.3
 
 A live elevator traffic prototype: React dashboard and ZeroWait mobile passenger app, backed by one authoritative discrete-event simulator. It can run locally or as a public demonstration service. No physical controls or comparative benchmarks are included.
+
+## Share the passenger app
+
+Use https://hackathon-1-xfrp.onrender.com/ for public sharing and QR codes. The root opens the passenger app on mobile and desktop. `/passenger` is an alias; `/dashboard` intentionally opens the simulator. Update old simulator bookmarks or QR targets to the root URL. The top **Passenger App | Simulator** switch preserves the shared simulation and current request.
 
 ## Run locally
 
@@ -79,7 +83,7 @@ Choose a scenario in `/dashboard`, click Load, then Start. Arrivals occur in sim
 - Off-peak: 30 arrivals, approximately 65% involving the lobby.
 - Heavy: 80 arrivals with the off-peak residential mix and shorter gaps.
 
-Default gaps are 2–8 seconds, or 0.5–1.5 seconds for Heavy. These are configurable demonstration assumptions, not research findings. `morningLobbyShare`, `eveningLobbyShare` and `offPeakLobbyShare` are adjustable in the dashboard settings. A fixed seed reproduces both the trips and their arrival times. In a two-floor building, every valid trip necessarily involves the lobby.
+Default gaps are 2–8 seconds, or 0.5–1.5 seconds for Heavy. These are configurable demonstration assumptions, not research findings. `morningLobbyShare`, `eveningLobbyShare` and `offPeakLobbyShare` are adjustable through the configuration API. A fixed seed reproduces both the trips and their arrival times. In a two-floor building, every valid trip necessarily involves the lobby.
 
 ## ZeroWait prototype scope
 

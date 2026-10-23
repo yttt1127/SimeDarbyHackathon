@@ -11,11 +11,11 @@ type Props = {
   busy: boolean;
   error: string;
   command: (path: string, data: unknown) => Promise<boolean>;
-  onDashboard: () => void;
+  navigation: React.ReactNode;
 };
 const directionLabel = (car: CarView) => car.direction === 'UP' ? '↑ UP' : car.direction === 'DOWN' ? '↓ DOWN' : '— IDLE';
 
-export function PassengerApp({ state, session, connected, busy, error, command, onDashboard }: Props) {
+export function PassengerApp({ state, session, connected, busy, error, command, navigation }: Props) {
   // Explicit demo source only. No inference from network or physical location.
   const [floor, setFloor] = useState<number | null>(Math.min(4, state.config.floors));
   const [pending, setPending] = useState(false);
@@ -32,10 +32,6 @@ export function PassengerApp({ state, session, connected, busy, error, command, 
   const committed = !!request && assignedCar?.committed?.floor === request.origin && assignedCar?.committed?.direction === request.direction;
   const locked = !connected || !session || busy || pending;
 
-  useEffect(() => {
-    document.title = 'ZeroWait · Your next ride';
-    return () => { document.title = 'LiftFlow · Live elevator intelligence'; };
-  }, []);
   useEffect(() => {
     if (floor !== null && floor > state.config.floors) setFloor(null);
   }, [floor, state.config.floors]);
@@ -68,7 +64,8 @@ export function PassengerApp({ state, session, connected, busy, error, command, 
   const capacity = assignedCar ? outlook(assignedCar) : { tone: 'neutral', label: 'Replanning' };
 
   return <div className={`passenger-shell ${request ? 'has-request' : ''}`}>
-    <header className="p-topbar"><button onClick={onDashboard} aria-label="Building overview" className="p-back">←</button><a href="/" className="p-wordmark">zerowait<span>.</span></a><span className={`p-live ${connected ? '' : 'offline'}`}><i />{connected ? 'Live connection' : 'Reconnecting'}</span></header>
+    <header className="p-topbar"><a href="/" className="p-wordmark">zerowait<span>.</span></a><span className={`p-live ${connected ? '' : 'offline'}`}><i />{connected ? 'Live connection' : 'Reconnecting'}</span></header>
+    {navigation}
     <main className="p-main">
       <div className="p-heading"><div><p>NORTHLINE RESIDENCES</p><h1>Your next ride.</h1></div></div>
       <div className="p-demo-location"><span>{origin === null ? 'Demo floor not set' : `Demo Floor ${String(origin).padStart(2, '0')}`}</span><button disabled={locked || !!request} onClick={() => locationSheet.current?.showModal()}>Change</button><small>Simulated location</small></div>
